@@ -314,7 +314,12 @@ export default function DashboardPage() {
               
               const heatIcon = L.divIcon({
                 className: 'custom-pulse-container',
-                html: `<div class="${pulseClass}" style="width: 100%; height: 100%;"></div>`,
+                html: `
+                  <div style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+                    <div class="${pulseClass}" style="position: absolute; width: 100%; height: 100%;"></div>
+                    <div style="width: 8px; height: 8px; background-color: white; border-radius: 50%; z-index: 10; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>
+                  </div>
+                `,
                 iconSize: [24, 24],
                 iconAnchor: [12, 12]
               });
