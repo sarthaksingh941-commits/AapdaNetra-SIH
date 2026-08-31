@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { MapPin, AlertCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { reportService, authService } from '../services/api';
+import AIChatbot from '../components/AIChatbot';
 
 export default function CitizenReportPage() {
   const [loadingLocation, setLoadingLocation] = useState(false);
@@ -165,6 +166,9 @@ export default function CitizenReportPage() {
           </form>
         </div>
       </main>
+
+      {/* Floating AI Assistant */}
+      <AIChatbot />
     </div>
   );
 }
