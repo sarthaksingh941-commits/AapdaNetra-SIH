@@ -285,20 +285,34 @@ export default function DashboardPage() {
               attribution='&copy; <a href="https://olamaps.com">Ola Maps</a> contributors'
               url="https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/{z}/{x}/{y}.png?api_key=IB2tQ5BHYCHBv1ntHCKfBROOOI5Sr4mI6nAB8CUu"
             />
-            {incidents.map((incident) => (
-              <Marker 
-                key={incident.id} 
-                position={[incident.latitude, incident.longitude]}
-              >
-                <Popup>
-                  <div className="text-sm">
-                    <strong className="text-red-600 block">{incident.title}</strong>
-                    Priority: {incident.priority_score.toFixed(1)} <br/>
-                    Status: {incident.status}
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
+            {incidents.map((incident) => {
+              let pulseClass = 'pulse-marker-medium';
+              if (incident.priority_score >= 80) pulseClass = 'pulse-marker-critical';
+              else if (incident.priority_score >= 60) pulseClass = 'pulse-marker-high';
+              
+              const heatIcon = L.divIcon({
+                className: 'custom-pulse-container',
+                html: `<div class="${pulseClass}" style="width: 100%; height: 100%;"></div>`,
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+              });
+
+              return (
+                <Marker 
+                  key={incident.id} 
+                  position={[incident.latitude, incident.longitude]}
+                  icon={heatIcon}
+                >
+                  <Popup>
+                    <div className="text-sm">
+                      <strong className="text-red-600 block">{incident.title}</strong>
+                      Priority: {incident.priority_score.toFixed(1)} <br/>
+                      Status: {incident.status}
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
           </MapContainer>
           
           {/* Floating Map Legend/Controls */}

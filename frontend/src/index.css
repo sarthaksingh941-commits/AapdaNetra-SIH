@@ -6,3 +6,29 @@ html, body, #root {
   padding: 0;
   font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
 }
+
+@keyframes breathing-heat {
+  0% { transform: scale(0.5); opacity: 0.8; }
+  100% { transform: scale(3.5); opacity: 0.0; }
+}
+
+.pulse-marker-critical {
+  background-color: rgba(220, 38, 38, 0.8);
+  border-radius: 50%;
+  animation: breathing-heat 1.2s infinite ease-out;
+  box-shadow: 0 0 25px 15px rgba(220, 38, 38, 0.6);
+}
+
+.pulse-marker-high {
+  background-color: rgba(234, 88, 12, 0.8);
+  border-radius: 50%;
+  animation: breathing-heat 1.8s infinite ease-out;
+  box-shadow: 0 0 20px 10px rgba(234, 88, 12, 0.6);
+}
+
+.pulse-marker-medium {
+  background-color: rgba(202, 138, 4, 0.8);
+  border-radius: 50%;
+  animation: breathing-heat 2.5s infinite ease-out;
+  box-shadow: 0 0 15px 8px rgba(202, 138, 4, 0.6);
+}
