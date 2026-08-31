@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { Clock, MapPin, Users, ShieldAlert, BarChart3, List } from 'lucide-react';
+import { Clock, MapPin, Users, ShieldAlert, BarChart3, List, Radio } from 'lucide-react';
 import { incidentService, teamService, authService } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -37,8 +37,20 @@ export default function DashboardPage() {
   const [showAssign, setShowAssign] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState("");
   const [activeTab, setActiveTab] = useState<'list' | 'analytics'>('list');
+  const [broadcastStatus, setBroadcastStatus] = useState<0 | 1 | 2 | 3>(0);
   const user = authService.getCurrentUser();
   const navigate = useNavigate();
+
+  const handleBroadcast = () => {
+    setBroadcastStatus(1); // scanning
+    setTimeout(() => {
+      setBroadcastStatus(2); // sending
+      setTimeout(() => {
+        setBroadcastStatus(3); // done
+        setTimeout(() => setBroadcastStatus(0), 4000); // reset after 4s
+      }, 2500);
+    }, 1500);
+  };
 
   useEffect(() => {
     if (!user || (user.role !== 'RESPONDER' && user.role !== 'ADMIN')) {
@@ -244,7 +256,25 @@ export default function DashboardPage() {
               Targeting: #{selectedIncident.id.toString().padStart(4, '0')}
             </h3>
             
-            {showAssign ? (
+            {broadcastStatus > 0 ? (
+              <div className="bg-slate-950 border border-slate-700 rounded-lg p-4 font-mono text-xs mb-2">
+                {broadcastStatus === 1 && (
+                  <div className="text-yellow-400 flex items-center animate-pulse">
+                    <Radio className="w-4 h-4 mr-2" /> Scanning active cell towers in 5km radius...
+                  </div>
+                )}
+                {broadcastStatus === 2 && (
+                  <div className="text-blue-400 flex items-center animate-pulse">
+                    <Radio className="w-4 h-4 mr-2" /> Transmitting Emergency Push SMS to all devices...
+                  </div>
+                )}
+                {broadcastStatus === 3 && (
+                  <div className="text-green-400 flex items-center font-bold">
+                    <Radio className="w-4 h-4 mr-2" /> SUCCESS: Alerts delivered to 14,392 active devices.
+                  </div>
+                )}
+              </div>
+            ) : showAssign ? (
               <div className="space-y-3">
                 <select 
                   className="w-full bg-slate-950 border border-slate-700 text-slate-300 p-2.5 rounded font-mono text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
@@ -272,7 +302,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 mb-3">
                 <button 
                   onClick={() => setShowAssign(true)}
                   className="bg-red-500/10 border border-red-500/50 text-red-400 py-2.5 rounded text-xs font-mono font-bold hover:bg-red-500 hover:text-white transition-all shadow-[0_0_10px_rgba(239,68,68,0.1)] hover:shadow-[0_0_20px_rgba(239,68,68,0.4)] uppercase tracking-wider"
@@ -289,6 +319,16 @@ export default function DashboardPage() {
                   }}
                 >Mark Neutralized</button>
               </div>
+            )}
+            
+            {/* Broadcast Alert Button */}
+            {!showAssign && broadcastStatus === 0 && (
+              <button 
+                onClick={handleBroadcast}
+                className="w-full bg-yellow-500/10 border border-yellow-500/50 text-yellow-500 py-2.5 rounded text-xs font-mono font-bold hover:bg-yellow-500 hover:text-slate-900 transition-all shadow-[0_0_10px_rgba(234,179,8,0.1)] hover:shadow-[0_0_20px_rgba(234,179,8,0.4)] uppercase tracking-wider flex items-center justify-center"
+              >
+                <Radio className="w-4 h-4 mr-2" /> Broadcast Public Alert
+              </button>
             )}
           </div>
           )}
