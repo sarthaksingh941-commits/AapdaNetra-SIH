@@ -6,8 +6,8 @@ settings = get_settings()
 
 # Add connect_args={"check_same_thread": False} for SQLite
 engine = create_engine(
-    settings.DATABASE_URI, 
-    connect_args={"check_same_thread": False}
+    settings.get_database_uri, 
+    connect_args={"check_same_thread": False} if settings.get_database_uri.startswith("sqlite") else {}
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

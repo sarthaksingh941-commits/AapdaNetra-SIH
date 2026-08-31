@@ -14,6 +14,14 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days
     
+    @property
+    def get_database_uri(self) -> str:
+        # SQLAlchemy 1.4+ removed support for the 'postgres://' scheme
+        # Render provides 'postgres://' by default, so we fix it here.
+        if self.DATABASE_URI and self.DATABASE_URI.startswith("postgres://"):
+            return self.DATABASE_URI.replace("postgres://", "postgresql://", 1)
+        return self.DATABASE_URI
+
     class Config:
         env_file = ".env"
 
