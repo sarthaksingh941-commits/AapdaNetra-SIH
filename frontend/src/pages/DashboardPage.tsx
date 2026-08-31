@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { Clock, MapPin, Users, ShieldAlert, BarChart3, List, Radio } from 'lucide-react';
+import { Clock, MapPin, Users, ShieldAlert, BarChart3, List, Radio, CloudRain } from 'lucide-react';
 import { incidentService, teamService, authService } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -196,8 +196,26 @@ export default function DashboardPage() {
               </div>
             </>
           ) : (
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-900/50">
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-900/50 custom-scrollbar">
               <h2 className="font-mono text-sm text-slate-400 mb-6 tracking-widest uppercase">Global Analytics</h2>
+              
+              {/* Weather Widget */}
+              <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl shadow-lg border border-slate-700/50 mb-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
+                <h3 className="font-mono text-blue-400 mb-3 text-xs tracking-wider flex items-center">
+                  <CloudRain className="w-4 h-4 mr-2" /> LIVE WEATHER RADAR
+                </h3>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="text-3xl font-light text-white mb-1">28°C</div>
+                    <div className="text-xs text-slate-400 font-mono">New Delhi, India</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-blue-300 font-medium">Heavy Rainfall Alert</div>
+                    <div className="text-xs text-slate-500 mt-1 font-mono">Humidity: 89% | Wind: 24km/h</div>
+                  </div>
+                </div>
+              </div>
               
               {incidents.length === 0 ? (
                 <div className="text-slate-600 font-mono text-xs text-center mt-10">INSUFFICIENT DATA GATHERED</div>
