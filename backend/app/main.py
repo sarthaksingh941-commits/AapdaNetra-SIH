@@ -10,6 +10,13 @@ settings = get_settings()
 # Create database tables (for development, use Alembic in production)
 Base.metadata.create_all(bind=engine)
 
+# Auto-seed mock teams on startup
+try:
+    from seed_teams import seed_teams
+    seed_teams()
+except Exception as e:
+    print("Could not seed teams on startup:", e)
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="AI-Powered Disaster Intelligence & Response Platform",
