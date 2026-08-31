@@ -46,9 +46,12 @@ export default function LoginPage() {
             </button>
           </div>
           <div className="mt-4 text-center">
-            <Link to="/register" className="text-sm text-blue-600 hover:underline">Don't have an account? Register</Link>
+            <Link to="/register" className="text-sm text-red-600 hover:underline">Don't have an account? Register</Link>
           </div>
         </form>
+      </div>
+      <div className="absolute bottom-4 text-gray-500 text-xs font-mono">
+        &copy; {new Date().getFullYear()} Team HackHawks. All rights reserved.
       </div>
     </div>
   );

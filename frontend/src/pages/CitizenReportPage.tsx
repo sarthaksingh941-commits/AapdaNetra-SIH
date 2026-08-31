@@ -169,6 +169,11 @@ export default function CitizenReportPage() {
 
       {/* Floating AI Assistant */}
       <AIChatbot />
+
+      {/* Footer */}
+      <footer className="bg-gray-800 text-gray-400 text-xs text-center py-3 mt-auto">
+        &copy; {new Date().getFullYear()} Team HackHawks. All rights reserved.
+      </footer>
     </div>
   );
 }
