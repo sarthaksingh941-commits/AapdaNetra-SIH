@@ -200,22 +200,43 @@ export default function DashboardPage() {
               <h2 className="font-mono text-sm text-slate-400 mb-6 tracking-widest uppercase">Global Analytics</h2>
               
               {/* Weather Widget */}
-              <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl shadow-lg border border-slate-700/50 mb-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
-                <h3 className="font-mono text-blue-400 mb-3 text-xs tracking-wider flex items-center">
-                  <CloudRain className="w-4 h-4 mr-2" /> LIVE WEATHER RADAR
-                </h3>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="text-3xl font-light text-white mb-1">28°C</div>
-                    <div className="text-xs text-slate-400 font-mono">New Delhi, India</div>
+              {(() => {
+                const target = selectedIncident || (incidents.length > 0 ? incidents[0] : null);
+                
+                let temp = "28°C";
+                let condition = "Clear Conditions";
+                let alertClass = "text-slate-300";
+                
+                if (target) {
+                   const type = target.title.toLowerCase();
+                   if (type.includes('flood') || type.includes('water')) { temp = "26°C"; condition = "Heavy Rainfall Warning"; alertClass = "text-blue-400"; }
+                   else if (type.includes('fire')) { temp = "38°C"; condition = "High Temperature Risk"; alertClass = "text-orange-400"; }
+                   else if (type.includes('earthquake')) { temp = "30°C"; condition = "Seismic Activity Zone"; alertClass = "text-red-400"; }
+                   else { condition = "Monitoring Active Zone"; alertClass = "text-yellow-400"; }
+                }
+
+                return (
+                  <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl shadow-lg border border-slate-700/50 mb-6 relative overflow-hidden transition-all duration-300">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
+                    <h3 className="font-mono text-blue-400 mb-3 text-xs tracking-wider flex items-center uppercase">
+                      <CloudRain className="w-4 h-4 mr-2" /> 
+                      {target ? `TARGET RADAR: ${target.latitude.toFixed(3)}N, ${target.longitude.toFixed(3)}E` : 'GLOBAL WEATHER RADAR'}
+                    </h3>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="text-3xl font-light text-white mb-1">{target ? temp : '--'}</div>
+                        <div className="text-xs text-slate-400 font-mono uppercase">{target ? `Zone: ${target.title}` : 'Awaiting Target...'}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-sm font-medium ${alertClass}`}>{target ? condition : 'System Standby'}</div>
+                        <div className="text-xs text-slate-500 mt-1 font-mono">
+                          {target ? `Humidity: ${target.title.toLowerCase().includes('fire') ? '12%' : '89%'} | Wind: 24km/h` : 'Offline'}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm text-blue-300 font-medium">Heavy Rainfall Alert</div>
-                    <div className="text-xs text-slate-500 mt-1 font-mono">Humidity: 89% | Wind: 24km/h</div>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
               
               {incidents.length === 0 ? (
                 <div className="text-slate-600 font-mono text-xs text-center mt-10">INSUFFICIENT DATA GATHERED</div>
