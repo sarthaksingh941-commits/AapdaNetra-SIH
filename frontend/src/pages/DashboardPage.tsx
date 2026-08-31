@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { AlertTriangle, Clock, MapPin, Users, ShieldAlert } from 'lucide-react';
+import { Clock, MapPin, Users, ShieldAlert } from 'lucide-react';
 import { incidentService, teamService, authService } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 

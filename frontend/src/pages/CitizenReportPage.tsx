@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, Upload, AlertCircle } from 'lucide-react';
+import { MapPin, AlertCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { reportService, authService } from '../services/api';
 
