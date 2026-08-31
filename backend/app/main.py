@@ -20,6 +20,7 @@ app = FastAPI(
 origins = [
     "http://localhost:5173", # Vite default
     "http://localhost:3000",
+    "*" # Allow vercel in prod
 ]
 
 app.add_middleware(
