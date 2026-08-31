@@ -13,6 +13,7 @@ class UserBase(BaseModel):
 # Properties to receive via API on creation
 class UserCreate(UserBase):
     password: str
+    admin_code: Optional[str] = None
 
 # Properties to receive via API on login
 class UserLogin(BaseModel):

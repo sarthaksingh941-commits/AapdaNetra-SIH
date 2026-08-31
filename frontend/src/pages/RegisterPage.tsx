@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { authService } from '../services/api';
 
 export default function RegisterPage() {
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'CITIZEN' });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'CITIZEN', admin_code: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -45,9 +45,16 @@ export default function RegisterPage() {
             <label className="block text-gray-700">Role</label>
             <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full px-4 py-2 mt-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white">
               <option value="CITIZEN">Citizen</option>
-              <option value="RESPONDER">Rescue Responder</option>
+              <option value="RESPONDER">Command Center / Responder</option>
             </select>
           </div>
+          {formData.role === 'RESPONDER' && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <label className="block text-red-800 font-bold text-sm mb-1">Admin Authorization Code <span className="text-red-500">*</span></label>
+              <p className="text-xs text-red-600 mb-2">Required for Command Center access.</p>
+              <input type="password" required value={formData.admin_code} onChange={(e) => setFormData({...formData, admin_code: e.target.value})} placeholder="Enter SIH Master Key" className="w-full px-4 py-2 border border-red-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-600 bg-white" />
+            </div>
+          )}
           <div className="flex items-baseline justify-between mt-6">
             <button disabled={loading} className="px-6 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-900 w-full font-bold disabled:opacity-50">
               {loading ? 'Registering...' : 'Register'}

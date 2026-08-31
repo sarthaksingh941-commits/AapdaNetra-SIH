@@ -18,6 +18,13 @@ def register_user(user_in: UserCreate, db: Session = Depends(get_db)):
             status_code=400,
             detail="The user with this email already exists in the system.",
         )
+        
+    if user_in.role in ["RESPONDER", "ADMIN"]:
+        if user_in.admin_code != settings.ADMIN_SECRET_KEY:
+            raise HTTPException(
+                status_code=403,
+                detail="Invalid Admin Authorization Code. Cannot register as Command Center.",
+            )
     user = User(
         email=user_in.email,
         name=user_in.name,
