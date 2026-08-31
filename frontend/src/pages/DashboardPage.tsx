@@ -95,7 +95,7 @@ export default function DashboardPage() {
   const severityData = useMemo(() => {
     const counts: any = { 'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0 };
     incidents.forEach(inc => { counts[inc.severity] = (counts[inc.severity] || 0) + 1; });
-    return Object.keys(counts).filter(k => counts[k] > 0).map(key => ({ name: key, value: counts[k] }));
+    return Object.keys(counts).filter(key => counts[key] > 0).map(key => ({ name: key, value: counts[key] }));
   }, [incidents]);
 
   return (
@@ -197,7 +197,7 @@ export default function DashboardPage() {
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie data={typeData} innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value" stroke="none">
-                            {typeData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                            {typeData.map((_entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                           </Pie>
                           <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f1f5f9' }} />
                         </PieChart>
