@@ -22,7 +22,7 @@ function MapUpdater({ selectedIncident }: { selectedIncident: any }) {
       // Use setView instead of flyTo for instant jumping without animation delay
       map.setView([selectedIncident.latitude, selectedIncident.longitude], 13);
     }
-  }, [selectedIncident, map]);
+  }, [selectedIncident?.id, map]);
   return null;
 }
 
