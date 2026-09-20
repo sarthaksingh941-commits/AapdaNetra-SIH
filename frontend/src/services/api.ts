@@ -58,6 +58,10 @@ export const teamService = {
   getAllTeams: async () => {
     const response = await api.get('/teams/');
     return response.data;
+  },
+  updateTeamLocation: async (teamId: number, lat: number, lng: number) => {
+    const response = await api.put(`/teams/${teamId}/location`, { latitude: lat, longitude: lng });
+    return response.data;
   }
 };
 

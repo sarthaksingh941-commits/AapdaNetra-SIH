@@ -6,6 +6,7 @@ import CitizenReportPage from './pages/CitizenReportPage';
 import MyReportsPage from './pages/MyReportsPage';
 import DashboardPage from './pages/DashboardPage';
 import IncidentDetailsPage from './pages/IncidentDetailsPage';
+import RescueAppPage from './pages/RescueAppPage';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
           <Route path="/my-reports" element={<MyReportsPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/incidents/:id" element={<IncidentDetailsPage />} />
+          <Route path="/rescue-app" element={<RescueAppPage />} />
         </Routes>
       </div>
     </Router>

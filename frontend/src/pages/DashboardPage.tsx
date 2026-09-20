@@ -93,7 +93,10 @@ export default function DashboardPage() {
     fetchIncidents();
     fetchTeams();
     // Poll every 2 seconds for instant MVP realtime feel
-    const interval = setInterval(fetchIncidents, 2000);
+    const interval = setInterval(() => {
+      fetchIncidents();
+      fetchTeams();
+    }, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -414,6 +417,36 @@ export default function DashboardPage() {
                       <strong className="text-red-400 block mb-1 uppercase tracking-widest border-b border-slate-700 pb-1">{incident.title}</strong>
                       <div className="flex justify-between mt-1"><span>PRIORITY:</span><span className="text-red-400">{incident.priority_score.toFixed(1)}</span></div>
                       <div className="flex justify-between"><span>STATUS:</span><span className="text-blue-400">{incident.status}</span></div>
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
+            
+            {/* Render Rescue Teams */}
+            {teams.filter(t => t.latitude && t.longitude).map((team) => {
+              const truckIcon = L.divIcon({
+                className: 'custom-truck-container',
+                html: `
+                  <div style="position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background-color: #3b82f6; border-radius: 5px; border: 2px solid white; box-shadow: 0 0 10px rgba(59,130,246,0.8);">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-9h-4v9z"/><path d="M15 6h4l3 3v2h-7z"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+                  </div>
+                `,
+                iconSize: [28, 28],
+                iconAnchor: [14, 14]
+              });
+
+              return (
+                <Marker 
+                  key={`team-${team.id}`} 
+                  position={[team.latitude, team.longitude]}
+                  icon={truckIcon}
+                >
+                  <Popup className="cyber-popup">
+                    <div className="text-xs font-mono bg-slate-900 text-slate-300 p-2 border border-blue-500 rounded">
+                      <strong className="text-blue-400 block mb-1 uppercase tracking-widest border-b border-blue-500/50 pb-1">{team.name}</strong>
+                      <div className="flex justify-between mt-1"><span>TYPE:</span><span className="text-white">{team.team_type}</span></div>
+                      <div className="flex justify-between"><span>STATUS:</span><span className="text-green-400">EN ROUTE</span></div>
                     </div>
                   </Popup>
                 </Marker>

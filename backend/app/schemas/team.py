@@ -13,6 +13,10 @@ class RescueTeamBase(BaseModel):
 class RescueTeamCreate(RescueTeamBase):
     pass
 
+class RescueTeamUpdateLocation(BaseModel):
+    latitude: float
+    longitude: float
+
 class RescueTeamResponse(RescueTeamBase):
     id: int
     status: TeamStatus
