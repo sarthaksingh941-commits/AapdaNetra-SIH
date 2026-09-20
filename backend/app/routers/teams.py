@@ -45,3 +45,39 @@ def update_team_location(
     db.commit()
     db.refresh(team)
     return team
+
+@router.get("/{team_id}/active-incident")
+def get_team_active_incident(team_id: int, db: Session = Depends(get_db)):
+    from app.models.team import Assignment
+    from app.models.incident import Incident
+    # Find the most recent pending or accepted assignment
+    assignment = db.query(Assignment).filter(
+        Assignment.team_id == team_id,
+        Assignment.status.in_(["PENDING", "ACCEPTED"])
+    ).order_by(Assignment.id.desc()).first()
+
+    if not assignment:
+        return None
+
+    incident = db.query(Incident).filter(Incident.id == assignment.incident_id).first()
+    return {
+        "assignment_id": assignment.id,
+        "status": assignment.status,
+        "incident": {
+            "id": incident.id,
+            "title": incident.title,
+            "type": incident.type,
+            "latitude": incident.latitude,
+            "longitude": incident.longitude,
+            "reports": len(incident.reports) if incident.reports else 0
+        }
+    }
+
+@router.post("/assignment/{assignment_id}/accept")
+def accept_assignment(assignment_id: int, db: Session = Depends(get_db)):
+    from app.models.team import Assignment
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if assignment:
+        assignment.status = "ACCEPTED"
+        db.commit()
+    return {"success": True}

@@ -62,6 +62,14 @@ export const teamService = {
   updateTeamLocation: async (teamId: number, lat: number, lng: number) => {
     const response = await api.put(`/teams/${teamId}/location`, { latitude: lat, longitude: lng });
     return response.data;
+  },
+  getActiveIncident: async (teamId: number) => {
+    const response = await api.get(`/teams/${teamId}/active-incident`);
+    return response.data;
+  },
+  acceptAssignment: async (assignmentId: number) => {
+    const response = await api.post(`/teams/assignment/${assignmentId}/accept`);
+    return response.data;
   }
 };
 
