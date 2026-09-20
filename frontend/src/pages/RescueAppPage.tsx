@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { teamService } from '../services/api';
-import { MapPin, Navigation, Truck } from 'lucide-react';
+import { Navigation, Truck } from 'lucide-react';
 
 export default function RescueAppPage() {
   const [teams, setTeams] = useState<any[]>([]);
