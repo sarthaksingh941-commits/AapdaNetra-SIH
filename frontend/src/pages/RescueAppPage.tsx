@@ -187,11 +187,11 @@ export default function RescueAppPage() {
             
             <div className="space-y-4 flex-1 flex flex-col">
               {location ? (
-                <div className="w-full flex-1 rounded-xl overflow-hidden border border-slate-700 shadow-[0_0_15px_rgba(59,130,246,0.2)] min-h-[300px] relative">
+                <div className="w-full rounded-xl overflow-hidden border border-slate-700 shadow-[0_0_15px_rgba(59,130,246,0.2)] relative" style={{ height: '350px' }}>
                   <MapContainer 
                     center={[location.lat, location.lng]} 
                     zoom={14} 
-                    className="w-full h-full z-0"
+                    style={{ height: '100%', width: '100%', zIndex: 0 }}
                   >
                     <TileLayer
                       attribution='&copy; <a href="https://olamaps.com">Ola Maps</a>'
