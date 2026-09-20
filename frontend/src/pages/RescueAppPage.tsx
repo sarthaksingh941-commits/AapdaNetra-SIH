@@ -169,6 +169,8 @@ export default function RescueAppPage() {
           <p className="text-sm text-slate-500">Standby. You will receive an alert here when Command Center dispatches your unit.</p>
         </div>
       )}
+      {error && <div className="p-2 text-xs text-red-500 text-center bg-red-950/20">{error}</div>}
+      {location && <div className="p-2 text-[10px] text-slate-500 text-center font-mono">LAT: {location.lat.toFixed(4)}, LNG: {location.lng.toFixed(4)}</div>}
     </div>
   );
 }
