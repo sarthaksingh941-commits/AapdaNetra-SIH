@@ -425,11 +425,29 @@ export default function DashboardPage() {
             
             {/* Render Rescue Teams */}
             {teams.filter(t => t.latitude && t.longitude).map((team) => {
+              let svgIcon = '';
+              let bgColor = '#3b82f6';
+              
+              if (team.team_type === 'MEDICAL' || team.team_type === 'AMBULANCE') {
+                bgColor = '#10b981'; // Green
+                svgIcon = '<path d="M19 14h-3v3h-2v-3h-3v-2h3V9h2v3h3z"/><path d="M22 17h-2v-2h-3v-2h3v-3h-3V8h3V6h-6v2h-4V6H4v2h3v2H4v3h3v2H4v2H2v2h2v3h16v-3h2v-2zm-6-2h-4v4h-2v-4H6v-2h4V9h2v4h4v2z"/>';
+              } else if (team.team_type === 'FIRE' || team.team_type === 'FIRE_BRIGADE') {
+                bgColor = '#ef4444'; // Red
+                svgIcon = '<path d="M12 2c-3.3 0-6 2.7-6 6v4H4v8h16v-8h-2V8c0-3.3-2.7-6-6-6zm0 2c2.2 0 4 1.8 4 4v4H8V8c0-2.2 1.8-4 4-4zm-6 8h12v4H6v-4z"/>';
+              } else if (team.team_type === 'POLICE') {
+                bgColor = '#3b82f6'; // Blue
+                svgIcon = '<path d="M12 2L4 5v6c0 5.5 3.8 10.7 8 12 4.2-1.3 8-6.5 8-12V5l-8-3zm0 2.2l6 2.2v4.6c0 4.3-2.9 8.3-6 9.5-3.1-1.2-6-5.2-6-9.5V6.4l6-2.2z"/>';
+              } else {
+                // Default Truck
+                bgColor = '#f59e0b'; // Amber
+                svgIcon = '<path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-9h-4v9z"/><path d="M15 6h4l3 3v2h-7z"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>';
+              }
+
               const truckIcon = L.divIcon({
                 className: 'custom-truck-container',
                 html: `
-                  <div style="position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background-color: #3b82f6; border-radius: 5px; border: 2px solid white; box-shadow: 0 0 10px rgba(59,130,246,0.8);">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-9h-4v9z"/><path d="M15 6h4l3 3v2h-7z"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+                  <div style="position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background-color: ${bgColor}; border-radius: 5px; border: 2px solid white; box-shadow: 0 0 10px ${bgColor};">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="white" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">${svgIcon}</svg>
                   </div>
                 `,
                 iconSize: [28, 28],
@@ -443,8 +461,8 @@ export default function DashboardPage() {
                   icon={truckIcon}
                 >
                   <Popup className="cyber-popup">
-                    <div className="text-xs font-mono bg-slate-900 text-slate-300 p-2 border border-blue-500 rounded">
-                      <strong className="text-blue-400 block mb-1 uppercase tracking-widest border-b border-blue-500/50 pb-1">{team.name}</strong>
+                    <div className="text-xs font-mono bg-slate-900 text-slate-300 p-2 border rounded" style={{borderColor: bgColor}}>
+                      <strong className="block mb-1 uppercase tracking-widest border-b pb-1" style={{color: bgColor, borderColor: bgColor}}>{team.name}</strong>
                       <div className="flex justify-between mt-1"><span>TYPE:</span><span className="text-white">{team.team_type}</span></div>
                       <div className="flex justify-between"><span>STATUS:</span><span className="text-green-400">EN ROUTE</span></div>
                     </div>

@@ -2,6 +2,30 @@ import { useState, useEffect } from 'react';
 import { teamService, incidentService } from '../services/api';
 import { Navigation, Truck, BellRing, CheckCircle, Map as MapIcon, AlertTriangle, ShieldCheck } from 'lucide-react';
 
+import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix for default marker icons in Leaflet with Vite
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
+
+// Create custom icons for the rescuer and the target
+const rescuerIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+  iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+});
+const targetIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+  iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+});
+
 export default function RescueAppPage() {
   const [teams, setTeams] = useState<any[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<number | ''>('');
@@ -161,11 +185,40 @@ export default function RescueAppPage() {
               </div>
             </div>
             
-            <div className="space-y-4">
-              <div className="bg-slate-900 p-3 rounded-lg border border-slate-700/50">
-                <div className="text-[10px] text-slate-500 uppercase font-mono">Coordinates</div>
-                <div className="font-mono text-sm text-blue-400">{activeIncident.incident.latitude.toFixed(5)}, {activeIncident.incident.longitude.toFixed(5)}</div>
-              </div>
+            <div className="space-y-4 flex-1 flex flex-col">
+              {location ? (
+                <div className="w-full flex-1 rounded-xl overflow-hidden border border-slate-700 shadow-[0_0_15px_rgba(59,130,246,0.2)] min-h-[300px] relative">
+                  <MapContainer 
+                    center={[location.lat, location.lng]} 
+                    zoom={14} 
+                    className="w-full h-full z-0"
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="https://olamaps.com">Ola Maps</a>'
+                      url="https://api.olamaps.io/tiles/vector/v1/styles/default-dark-standard/{z}/{x}/{y}.png?api_key=IB2tQ5BHYCHBv1ntHCKfBROOOI5Sr4mI6nAB8CUu"
+                      className="map-tiles-dark"
+                    />
+                    <Marker position={[location.lat, location.lng]} icon={rescuerIcon} />
+                    <Marker position={[activeIncident.incident.latitude, activeIncident.incident.longitude]} icon={targetIcon} />
+                    {/* Simulated Ola Directions API Polyline */}
+                    <Polyline 
+                      positions={[
+                        [location.lat, location.lng],
+                        [activeIncident.incident.latitude, activeIncident.incident.longitude]
+                      ]}
+                      pathOptions={{ color: '#3b82f6', weight: 4, dashArray: '10, 10' }}
+                    />
+                  </MapContainer>
+                  <div className="absolute top-2 left-2 bg-slate-900/80 p-1.5 rounded text-[8px] font-mono border border-slate-700 text-blue-400 z-[1000] backdrop-blur-md uppercase">
+                    POWERED BY OLA MAPS DIRECTION API
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full h-48 bg-slate-900 rounded-xl border border-slate-700 flex items-center justify-center font-mono text-xs text-slate-500">
+                  Awaiting GPS Lock...
+                </div>
+              )}
+              
               <div className="bg-slate-900 p-3 rounded-lg border border-slate-700/50">
                 <div className="text-[10px] text-slate-500 uppercase font-mono">Public Reports</div>
                 <div className="font-mono text-sm text-white">{activeIncident.incident.reports} Citizens Affected</div>
