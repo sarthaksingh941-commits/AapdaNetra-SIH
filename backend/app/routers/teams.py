@@ -11,8 +11,7 @@ router = APIRouter()
 
 @router.get("/", response_model=List[RescueTeamResponse])
 def get_teams(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_responder)
+    db: Session = Depends(get_db)
 ):
     teams = db.query(RescueTeam).all()
     return teams
@@ -20,8 +19,7 @@ def get_teams(
 @router.post("/", response_model=RescueTeamResponse)
 def create_team(
     team_in: RescueTeamCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_responder)
+    db: Session = Depends(get_db)
 ):
     team = RescueTeam(**team_in.dict())
     db.add(team)
