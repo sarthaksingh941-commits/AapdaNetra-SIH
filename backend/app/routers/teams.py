@@ -29,6 +29,21 @@ def create_team(
     db.refresh(team)
     return team
 
+from app.schemas.team import RescueTeamLogin
+from fastapi import HTTPException
+
+@router.post("/login")
+def login_team(
+    login_data: RescueTeamLogin,
+    db: Session = Depends(get_db)
+):
+    team = db.query(RescueTeam).filter(RescueTeam.id == login_data.team_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    if team.pin != login_data.pin:
+        raise HTTPException(status_code=401, detail="Incorrect PIN")
+    return {"success": True, "team_id": team.id, "name": team.name, "type": team.team_type}
+
 @router.put("/{team_id}/location", response_model=RescueTeamResponse)
 def update_team_location(
     team_id: int,

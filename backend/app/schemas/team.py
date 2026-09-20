@@ -11,7 +11,11 @@ class RescueTeamBase(BaseModel):
     capacity: Optional[int] = 5
 
 class RescueTeamCreate(RescueTeamBase):
-    pass
+    pin: str
+
+class RescueTeamLogin(BaseModel):
+    team_id: int
+    pin: str
 
 class RescueTeamUpdateLocation(BaseModel):
     latitude: float

@@ -32,16 +32,53 @@ export default function RescueAppPage() {
   const [activeIncident, setActiveIncident] = useState<any>(null);
   const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
   const [error, setError] = useState('');
+  
+  // Auth state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [pin, setPin] = useState('');
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamType, setNewTeamType] = useState('RESCUE');
 
   // 1. Fetch teams on load
-  useEffect(() => {
+  const fetchTeams = () => {
     teamService.getAllTeams().then(data => setTeams(data)).catch(err => console.error(err));
+  };
+
+  useEffect(() => {
+    fetchTeams();
   }, []);
 
-  // 2. Poll for assignments if a team is selected
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTeamId || !pin) return setError("Please select a team and enter PIN");
+    try {
+      await teamService.loginTeam(Number(selectedTeamId), pin);
+      setIsAuthenticated(true);
+      setError('');
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Invalid PIN");
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTeamName || !pin) return setError("Please enter team name and PIN");
+    try {
+      const newTeam = await teamService.registerTeam(newTeamName, newTeamType, pin);
+      setSelectedTeamId(newTeam.id);
+      setIsAuthenticated(true);
+      setError('');
+      fetchTeams();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Registration failed");
+    }
+  };
+
+  // 2. Poll for assignments if authenticated
   useEffect(() => {
     let interval: any;
-    if (selectedTeamId) {
+    if (isAuthenticated && selectedTeamId) {
       const checkAssignment = async () => {
         try {
           const data = await teamService.getActiveIncident(Number(selectedTeamId));
@@ -59,12 +96,12 @@ export default function RescueAppPage() {
       interval = setInterval(checkAssignment, 3000); // Check every 3 seconds
     }
     return () => { if (interval) clearInterval(interval); };
-  }, [selectedTeamId]);
+  }, [isAuthenticated, selectedTeamId]);
 
   // 3. Track GPS if accepted
   useEffect(() => {
     let watchId: number;
-    if (activeIncident?.status === 'ACCEPTED' && selectedTeamId) {
+    if (activeIncident?.status === 'ACCEPTED' && isAuthenticated && selectedTeamId) {
       if (navigator.geolocation) {
         watchId = navigator.geolocation.watchPosition(
           async (pos) => {
@@ -120,20 +157,79 @@ export default function RescueAppPage() {
         </div>
       </header>
 
-      {!selectedTeamId ? (
+      {!isAuthenticated ? (
         <div className="p-6 flex-1 flex flex-col justify-center">
           <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
-            <h2 className="text-center text-sm uppercase tracking-widest text-slate-400 mb-6">Device Initialization</h2>
-            <select 
-              value={selectedTeamId}
-              onChange={(e) => setSelectedTeamId(Number(e.target.value))}
-              className="w-full bg-slate-900 border border-slate-600 rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono"
-            >
-              <option value="">-- Select Your Unit --</option>
-              {teams.map(t => (
-                <option key={t.id} value={t.id}>{t.name} ({t.team_type})</option>
-              ))}
-            </select>
+            <h2 className="text-center text-sm uppercase tracking-widest text-slate-400 mb-6">
+              {isRegistering ? "Register Responder Unit" : "Responder Device Login"}
+            </h2>
+            
+            {isRegistering ? (
+              <form onSubmit={handleRegister} className="space-y-4">
+                <input 
+                  type="text" 
+                  placeholder="Unit Name (e.g. NDRF Alpha)" 
+                  value={newTeamName}
+                  onChange={e => setNewTeamName(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-600 rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                  required
+                />
+                <select 
+                  value={newTeamType}
+                  onChange={e => setNewTeamType(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-600 rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                >
+                  <option value="RESCUE">RESCUE</option>
+                  <option value="MEDICAL">MEDICAL / AMBULANCE</option>
+                  <option value="FIRE">FIRE BRIGADE</option>
+                  <option value="POLICE">POLICE</option>
+                </select>
+                <input 
+                  type="password" 
+                  placeholder="Security PIN" 
+                  value={pin}
+                  onChange={e => setPin(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-600 rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-center tracking-[1em]"
+                  maxLength={6}
+                  required
+                />
+                <button type="submit" className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                  REGISTER UNIT
+                </button>
+                <p className="text-center text-xs text-blue-400 cursor-pointer mt-4" onClick={() => {setIsRegistering(false); setError(''); setPin('');}}>
+                  Already registered? Login here
+                </p>
+              </form>
+            ) : (
+              <form onSubmit={handleLogin} className="space-y-4">
+                <select 
+                  value={selectedTeamId}
+                  onChange={(e) => setSelectedTeamId(Number(e.target.value))}
+                  className="w-full bg-slate-900 border border-slate-600 rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                  required
+                >
+                  <option value="">-- Select Your Unit --</option>
+                  {teams.map(t => (
+                    <option key={t.id} value={t.id}>{t.name} ({t.team_type})</option>
+                  ))}
+                </select>
+                <input 
+                  type="password" 
+                  placeholder="Enter Security PIN" 
+                  value={pin}
+                  onChange={e => setPin(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-600 rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-center tracking-[1em]"
+                  maxLength={6}
+                  required
+                />
+                <button type="submit" className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                  AUTHENTICATE
+                </button>
+                <p className="text-center text-xs text-blue-400 cursor-pointer mt-4" onClick={() => {setIsRegistering(true); setError(''); setPin('');}}>
+                  New Unit? Register here
+                </p>
+              </form>
+            )}
           </div>
         </div>
       ) : activeIncident?.status === 'PENDING' ? (

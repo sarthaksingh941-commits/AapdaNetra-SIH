@@ -56,7 +56,15 @@ export const reportService = {
 
 export const teamService = {
   getAllTeams: async () => {
-    const response = await api.get('/teams/');
+    const response = await api.get('/teams');
+    return response.data;
+  },
+  loginTeam: async (teamId: number, pin: string) => {
+    const response = await api.post('/teams/login', { team_id: teamId, pin });
+    return response.data;
+  },
+  registerTeam: async (name: string, teamType: string, pin: string) => {
+    const response = await api.post('/teams/', { name, team_type: teamType, pin });
     return response.data;
   },
   updateTeamLocation: async (teamId: number, lat: number, lng: number) => {

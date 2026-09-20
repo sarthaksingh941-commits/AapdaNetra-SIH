@@ -16,6 +16,7 @@ class RescueTeam(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     team_type = Column(String, nullable=False)
+    pin = Column(String, nullable=True) # Added for Responder App authentication
     status = Column(Enum(TeamStatus), default=TeamStatus.AVAILABLE)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
