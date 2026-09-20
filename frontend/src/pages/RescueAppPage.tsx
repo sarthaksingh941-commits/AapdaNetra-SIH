@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { teamService } from '../services/api';
-import { Navigation, Truck, BellRing, CheckCircle, Map as MapIcon, AlertTriangle } from 'lucide-react';
+import { teamService, incidentService } from '../services/api';
+import { Navigation, Truck, BellRing, CheckCircle, Map as MapIcon, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 export default function RescueAppPage() {
   const [teams, setTeams] = useState<any[]>([]);
@@ -21,7 +21,12 @@ export default function RescueAppPage() {
       const checkAssignment = async () => {
         try {
           const data = await teamService.getActiveIncident(Number(selectedTeamId));
-          setActiveIncident(data);
+          // Don't override if we just marked it resolved locally
+          if (data?.incident?.status !== 'RESOLVED') {
+             setActiveIncident(data);
+          } else {
+             setActiveIncident(null);
+          }
         } catch (err) {
           console.error("Poll error", err);
         }
@@ -61,6 +66,16 @@ export default function RescueAppPage() {
       await teamService.acceptAssignment(activeIncident.assignment_id);
       const data = await teamService.getActiveIncident(Number(selectedTeamId));
       setActiveIncident(data);
+    }
+  };
+
+  const handleNeutralize = async () => {
+    if (activeIncident?.incident) {
+      if (window.confirm("Are you sure the threat is completely neutralized?")) {
+        await incidentService.updateStatus(activeIncident.incident.id, 'RESOLVED');
+        setActiveIncident(null);
+        alert("Situation Neutralized! Standing by for next orders.");
+      }
     }
   };
 
@@ -123,11 +138,16 @@ export default function RescueAppPage() {
         </div>
       ) : activeIncident?.status === 'ACCEPTED' ? (
         <div className="flex-1 flex flex-col p-6 bg-slate-900">
-          <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl mb-6 shadow-lg flex items-center">
-            <Navigation className="w-8 h-8 text-blue-500 mr-4 animate-pulse" />
-            <div>
-              <div className="text-blue-400 font-bold tracking-wider">LIVE TRACKING ACTIVE</div>
-              <div className="text-xs text-slate-400 font-mono">Transmitting GPS to Command Center</div>
+          <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl mb-6 shadow-lg flex items-center justify-between">
+            <div className="flex items-center">
+              <Navigation className="w-8 h-8 text-blue-500 mr-4 animate-pulse" />
+              <div>
+                <div className="text-blue-400 font-bold tracking-wider">LIVE TRACKING ACTIVE</div>
+                <div className="text-xs text-slate-400 font-mono">Transmitting GPS to Command Center</div>
+              </div>
+            </div>
+            <div className="bg-blue-500/10 p-2 rounded border border-blue-500/30 text-[10px] text-blue-400 animate-pulse">
+              COMMAND LINKED
             </div>
           </div>
 
@@ -153,12 +173,20 @@ export default function RescueAppPage() {
             </div>
           </div>
 
-          <button 
-            onClick={openNavigation}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-5 rounded-2xl text-lg tracking-wider uppercase shadow-[0_0_20px_rgba(37,99,235,0.5)] transition-all flex items-center justify-center"
-          >
-            <MapIcon className="w-6 h-6 mr-2" /> OPEN NAVIGATION
-          </button>
+          <div className="flex space-x-3">
+            <button 
+              onClick={openNavigation}
+              className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl text-sm tracking-wider uppercase shadow-[0_0_20px_rgba(37,99,235,0.5)] transition-all flex items-center justify-center"
+            >
+              <MapIcon className="w-5 h-5 mr-2" /> NAVIGATE
+            </button>
+            <button 
+              onClick={handleNeutralize}
+              className="flex-1 bg-slate-800 hover:bg-green-600 border border-green-500 hover:border-transparent text-green-500 hover:text-white font-bold py-4 rounded-xl text-sm tracking-wider uppercase shadow-[0_0_15px_rgba(34,197,94,0.2)] transition-all flex items-center justify-center"
+            >
+              <ShieldCheck className="w-5 h-5 mr-2" /> NEUTRALIZE
+            </button>
+          </div>
         </div>
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
