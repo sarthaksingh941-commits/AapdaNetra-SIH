@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     
     # SQLite for testing
     DATABASE_URI: str = "sqlite:///./aapdanetra.db"
+    DATABASE_URL: str = ""
     
     # Auth
     SECRET_KEY: str = "replace-this-with-a-very-long-and-secure-random-string"
@@ -17,11 +18,17 @@ class Settings(BaseSettings):
     
     @property
     def get_database_uri(self) -> str:
-        # SQLAlchemy 1.4+ removed support for the 'postgres://' scheme
-        # Render provides 'postgres://' by default, so we fix it here.
-        if self.DATABASE_URI and self.DATABASE_URI.startswith("postgres://"):
-            return self.DATABASE_URI.replace("postgres://", "postgresql://", 1)
-        return self.DATABASE_URI
+        import os
+        uri = os.getenv("DATABASE_URL") or os.getenv("DATABASE_URI") or self.DATABASE_URL or self.DATABASE_URI
+        if not uri:
+            return "sqlite:///./aapdanetra.db"
+        # Render provides 'postgres://' or 'postgresql://' by default.
+        # Specify postgresql+psycopg2:// so SQLAlchemy uses psycopg2-binary
+        if uri.startswith("postgres://"):
+            return uri.replace("postgres://", "postgresql+psycopg2://", 1)
+        elif uri.startswith("postgresql://"):
+            return uri.replace("postgresql://", "postgresql+psycopg2://", 1)
+        return uri
 
     class Config:
         env_file = ".env"

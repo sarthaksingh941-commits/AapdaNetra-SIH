@@ -5,10 +5,15 @@ from app.core.config import get_settings
 settings = get_settings()
 
 # Add connect_args={"check_same_thread": False} for SQLite
-engine = create_engine(
-    settings.get_database_uri, 
-    connect_args={"check_same_thread": False} if settings.get_database_uri.startswith("sqlite") else {}
-)
+db_uri = settings.get_database_uri
+try:
+    engine = create_engine(
+        db_uri, 
+        connect_args={"check_same_thread": False} if db_uri.startswith("sqlite") else {}
+    )
+except Exception as e:
+    print(f"Warning: Failed to create engine with URI '{db_uri}': {e}. Falling back to SQLite.")
+    engine = create_engine("sqlite:///./aapdanetra.db", connect_args={"check_same_thread": False})
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
