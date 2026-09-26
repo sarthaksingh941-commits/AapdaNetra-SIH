@@ -96,6 +96,19 @@ export default function RescueAppPage() {
     localStorage.setItem('responder_team_type', finalType);
     localStorage.setItem('responder_duty', 'true');
 
+    try {
+      const initialTelemetry = {
+        id: teamId,
+        name: finalName,
+        team_type: finalType,
+        status: 'AVAILABLE',
+        latitude: location?.lat || 28.6139,
+        longitude: location?.lng || 77.2090,
+        updatedAt: Date.now()
+      };
+      localStorage.setItem('live_responder_telemetry', JSON.stringify(initialTelemetry));
+    } catch (e) {}
+
     setIsConnecting(false);
   };
 
@@ -103,6 +116,7 @@ export default function RescueAppPage() {
     localStorage.removeItem('responder_team_id');
     localStorage.removeItem('responder_team_name');
     localStorage.removeItem('responder_team_type');
+    localStorage.removeItem('live_responder_telemetry');
     setSelectedTeamId('');
     setActiveIncident(null);
     setError('');
@@ -112,6 +126,12 @@ export default function RescueAppPage() {
     const nextDuty = !isOnDuty;
     setIsOnDuty(nextDuty);
     localStorage.setItem('responder_duty', String(nextDuty));
+
+    try {
+      const cur = JSON.parse(localStorage.getItem('live_responder_telemetry') || '{}');
+      cur.status = nextDuty ? 'AVAILABLE' : 'OFF_DUTY';
+      localStorage.setItem('live_responder_telemetry', JSON.stringify(cur));
+    } catch (e) {}
 
     if (selectedTeamId) {
       try {
@@ -131,6 +151,21 @@ export default function RescueAppPage() {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
           setLocation({ lat, lng });
+
+          // Broadcast locally for instant zero-lag Command Center sync
+          try {
+            const telemetry = {
+              id: selectedTeamId,
+              name: teamName,
+              team_type: teamType,
+              status: isOnDuty ? 'AVAILABLE' : 'OFF_DUTY',
+              latitude: lat,
+              longitude: lng,
+              updatedAt: Date.now()
+            };
+            localStorage.setItem('live_responder_telemetry', JSON.stringify(telemetry));
+          } catch (e) {}
+
           try {
             await teamService.updateTeamLocation(Number(selectedTeamId), lat, lng);
           } catch (err) {

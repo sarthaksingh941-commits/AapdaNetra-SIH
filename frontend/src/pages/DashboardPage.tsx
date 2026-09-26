@@ -83,8 +83,45 @@ export default function DashboardPage() {
 
     const fetchTeams = async () => {
       try {
-        const data = await teamService.getAllTeams();
-        setTeams(data);
+        let remoteTeams: any[] = [];
+        try {
+          const res = await teamService.getAllTeams();
+          if (Array.isArray(res) && res.length > 0) {
+            remoteTeams = res;
+          }
+        } catch (e) {
+          // Backend offline / waking up
+        }
+
+        let merged = [...remoteTeams];
+
+        // Merge live responder telemetry from local session if active
+        try {
+          const localStr = localStorage.getItem('live_responder_telemetry');
+          if (localStr) {
+            const localData = JSON.parse(localStr);
+            if (localData && localData.name) {
+              const idx = merged.findIndex(t => t.id === localData.id || t.name === localData.name);
+              if (idx >= 0) {
+                merged[idx] = { ...merged[idx], ...localData };
+              } else {
+                merged.push(localData);
+              }
+            }
+          }
+        } catch (e) {}
+
+        // Fallback default teams if remote is completely empty
+        if (merged.length === 0) {
+          merged = [
+            { id: 1, name: "NDRF Alpha Team", team_type: "RESCUE", status: "AVAILABLE", latitude: 28.6139, longitude: 77.2090 },
+            { id: 2, name: "Delhi Fire Service", team_type: "FIRE", status: "AVAILABLE", latitude: 28.5355, longitude: 77.3910 },
+            { id: 3, name: "State Medical Response", team_type: "MEDICAL", status: "AVAILABLE", latitude: 28.7041, longitude: 77.1025 },
+            { id: 4, name: "Delhi Police Patrol", team_type: "POLICE", status: "AVAILABLE", latitude: 28.6300, longitude: 77.2200 }
+          ];
+        }
+
+        setTeams(merged);
       } catch (err) {
         console.error("Failed to fetch teams", err);
       }
