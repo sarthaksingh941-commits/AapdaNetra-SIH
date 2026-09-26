@@ -23,6 +23,11 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install Android Platform 36 SDK
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
+
       - name: Install Frontend Dependencies
         working-directory: frontend
         run: npm ci
@@ -31,12 +36,12 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Copy Assets into Android Native Project
+        working-directory: frontend
+        run: npx cap copy android
+
       - name: Make Gradle Wrapper Executable
         run: chmod +x frontend/android/gradlew
-
-      - name: Sync Capacitor Android
-        working-directory: frontend
-        run: npx cap sync android
 
       - name: Build Android Debug APK
         working-directory: frontend/android
