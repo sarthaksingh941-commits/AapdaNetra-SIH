@@ -95,8 +95,36 @@ def update_team_location(
     db.refresh(team)
     return team
 
+from pydantic import BaseModel
+
+class TeamStatusUpdate(BaseModel):
+    status: str
+
+@router.patch("/{team_id}/status")
+def update_team_status(
+    team_id: int,
+    status_in: TeamStatusUpdate,
+    db: Session = Depends(get_db)
+):
+    team = db.query(RescueTeam).filter(RescueTeam.id == team_id).first()
+    if not team:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Team not found")
+    team.status = status_in.status
+    db.commit()
+    db.refresh(team)
+    return {
+        "id": team.id,
+        "name": team.name,
+        "status": team.status.value if hasattr(team.status, "value") else str(team.status)
+    }
+
 @router.get("/{team_id}/active-incident")
 def get_team_active_incident(team_id: int, db: Session = Depends(get_db)):
+    team = db.query(RescueTeam).filter(RescueTeam.id == team_id).first()
+    if team and (str(team.status) == "OFF_DUTY" or (hasattr(team.status, "value") and team.status.value == "OFF_DUTY")):
+        return None
+
     from app.models.team import Assignment
     from app.models.incident import Incident
     # Find the most recent pending or accepted assignment

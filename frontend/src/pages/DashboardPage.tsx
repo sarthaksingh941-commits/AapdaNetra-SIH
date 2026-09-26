@@ -324,7 +324,7 @@ export default function DashboardPage() {
                   value={selectedTeam}
                 >
                   <option value="">-- SELECT RESPONDER TEAM --</option>
-                  {teams.map(t => <option key={t.id} value={t.id}>{t.name} ({t.team_type})</option>)}
+                  {teams.filter(t => t.status !== 'OFF_DUTY').map(t => <option key={t.id} value={t.id}>{t.name} ({t.team_type})</option>)}
                 </select>
                 <div className="flex space-x-3">
                   <button 
@@ -424,7 +424,7 @@ export default function DashboardPage() {
             })}
             
             {/* Render Rescue Teams */}
-            {teams.filter(t => t.latitude && t.longitude).map((team) => {
+            {teams.filter(t => t.latitude && t.longitude && t.status !== 'OFF_DUTY').map((team) => {
               let svgIcon = '';
               let bgColor = '#3b82f6';
               

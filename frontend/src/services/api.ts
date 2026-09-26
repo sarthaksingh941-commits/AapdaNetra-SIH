@@ -78,6 +78,10 @@ export const teamService = {
   acceptAssignment: async (assignmentId: number) => {
     const response = await api.post(`/teams/assignment/${assignmentId}/accept`);
     return response.data;
+  },
+  updateTeamStatus: async (teamId: number, status: string) => {
+    const response = await api.patch(`/teams/${teamId}/status`, { status });
+    return response.data;
   }
 };
 

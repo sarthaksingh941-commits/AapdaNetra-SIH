@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { teamService, incidentService } from '../services/api';
-import { Navigation, Truck, BellRing, CheckCircle, Map as MapIcon, AlertTriangle, ShieldCheck, RefreshCw, Radio, Loader2 } from 'lucide-react';
+import { Navigation, Truck, BellRing, CheckCircle, Map as MapIcon, AlertTriangle, ShieldCheck, RefreshCw, Radio, Loader2, Power, PowerOff, ShieldAlert } from 'lucide-react';
 
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -37,22 +37,27 @@ export default function RescueAppPage() {
   const [selectedTeamId, setSelectedTeamId] = useState<number | ''>('');
   const [teamName, setTeamName] = useState('');
   const [teamType, setTeamType] = useState('RESCUE');
+  const [isOnDuty, setIsOnDuty] = useState(true);
   
   const [activeIncident, setActiveIncident] = useState<any>(null);
   const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState('');
 
-  // 1. Restore saved team on load
+  // 1. Restore saved team & duty status on load
   useEffect(() => {
     const savedId = localStorage.getItem('responder_team_id');
     const savedName = localStorage.getItem('responder_team_name');
     const savedType = localStorage.getItem('responder_team_type');
+    const savedDuty = localStorage.getItem('responder_duty');
     
     if (savedId && savedName) {
       setSelectedTeamId(Number(savedId));
       setTeamName(savedName);
       if (savedType) setTeamType(savedType);
+    }
+    if (savedDuty !== null) {
+      setIsOnDuty(savedDuty === 'true');
     }
   }, []);
 
@@ -73,7 +78,6 @@ export default function RescueAppPage() {
     let teamId: number = Date.now();
 
     try {
-      // Find or create team on the backend
       const team = await teamService.registerTeam(finalName, finalType);
       if (team && team.id) {
         teamId = team.id;
@@ -85,10 +89,12 @@ export default function RescueAppPage() {
     setSelectedTeamId(teamId);
     setTeamName(finalName);
     setTeamType(finalType);
+    setIsOnDuty(true);
 
     localStorage.setItem('responder_team_id', String(teamId));
     localStorage.setItem('responder_team_name', finalName);
     localStorage.setItem('responder_team_type', finalType);
+    localStorage.setItem('responder_duty', 'true');
 
     setIsConnecting(false);
   };
@@ -102,10 +108,24 @@ export default function RescueAppPage() {
     setError('');
   };
 
-  // 3. Continuously send GPS location once connected
+  const toggleDutyStatus = async () => {
+    const nextDuty = !isOnDuty;
+    setIsOnDuty(nextDuty);
+    localStorage.setItem('responder_duty', String(nextDuty));
+
+    if (selectedTeamId) {
+      try {
+        await teamService.updateTeamStatus(Number(selectedTeamId), nextDuty ? 'AVAILABLE' : 'OFF_DUTY');
+      } catch (e) {
+        console.warn("Duty status update error:", e);
+      }
+    }
+  };
+
+  // 3. Continuously send GPS location ONLY when ON DUTY
   useEffect(() => {
     let watchId: number;
-    if (selectedTeamId && navigator.geolocation) {
+    if (selectedTeamId && isOnDuty && navigator.geolocation) {
       watchId = navigator.geolocation.watchPosition(
         async (pos) => {
           const lat = pos.coords.latitude;
@@ -127,12 +147,12 @@ export default function RescueAppPage() {
     return () => {
       if (watchId) navigator.geolocation.clearWatch(watchId);
     };
-  }, [selectedTeamId]);
+  }, [selectedTeamId, isOnDuty]);
 
-  // 4. Poll for dispatches from Command Center
+  // 4. Poll for dispatches from Command Center ONLY when ON DUTY
   useEffect(() => {
     let interval: any;
-    if (selectedTeamId) {
+    if (selectedTeamId && isOnDuty) {
       const checkAssignment = async () => {
         try {
           const data = await teamService.getActiveIncident(Number(selectedTeamId));
@@ -147,11 +167,13 @@ export default function RescueAppPage() {
       };
       checkAssignment();
       interval = setInterval(checkAssignment, 2000); // 2 second check
+    } else {
+      setActiveIncident(null);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [selectedTeamId]);
+  }, [selectedTeamId, isOnDuty]);
 
   const handleAccept = async () => {
     if (activeIncident) {
@@ -197,14 +219,31 @@ export default function RescueAppPage() {
         </div>
 
         {selectedTeamId && (
-          <button 
-            onClick={handleDisconnect}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition-all cursor-pointer"
-            title="Change Responder Name"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Change Name</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            {/* On / Off Duty Toggle Button */}
+            <button 
+              onClick={toggleDutyStatus}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                isOnDuty 
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30' 
+                  : 'bg-red-500/20 text-red-400 border-red-500/40 hover:bg-red-500/30'
+              }`}
+              title={isOnDuty ? "Click to go Off Duty" : "Click to go On Duty"}
+            >
+              <span className={`w-2 h-2 rounded-full ${isOnDuty ? 'bg-emerald-400 animate-ping' : 'bg-red-400'}`}></span>
+              <span>{isOnDuty ? 'ON DUTY' : 'OFF DUTY'}</span>
+            </button>
+
+            {/* Switch Unit Button */}
+            <button 
+              onClick={handleDisconnect}
+              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition-all cursor-pointer"
+              title="Change Responder Name"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span className="hidden sm:inline">Change</span>
+            </button>
+          </div>
         )}
       </header>
 
@@ -290,6 +329,28 @@ export default function RescueAppPage() {
               </button>
             </form>
           </div>
+        </div>
+      ) : !isOnDuty ? (
+        /* Screen 1.5: Off Duty Paused Mode */
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto w-full">
+          <div className="w-24 h-24 rounded-full bg-slate-800/80 border-4 border-red-500/40 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
+            <ShieldAlert className="w-12 h-12 text-red-400" />
+          </div>
+          <div className="inline-block px-3 py-1 bg-red-500/10 border border-red-500/30 rounded-full text-red-400 text-xs font-mono uppercase tracking-widest mb-3">
+            Status: Offline
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">YOU ARE OFF DUTY</h2>
+          <p className="text-sm text-slate-400 mb-8 leading-relaxed">
+            Your vehicle is hidden from the Command Center map. Emergency requests and live GPS tracking are currently suspended.
+          </p>
+
+          <button
+            onClick={toggleDutyStatus}
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all flex items-center justify-center space-x-2 cursor-pointer text-base uppercase tracking-wider"
+          >
+            <Power className="w-5 h-5" />
+            <span>GO ON DUTY</span>
+          </button>
         </div>
       ) : activeIncident?.status === 'PENDING' ? (
         /* Screen 2: Incoming Dispatch Alert */
@@ -399,7 +460,7 @@ export default function RescueAppPage() {
         </div>
       ) : (
         /* Screen 4: Standby Screen */
-        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto w-full">
           <div className="w-24 h-24 rounded-full bg-slate-800 border-4 border-slate-700 flex items-center justify-center mb-6">
             <Truck className="w-10 h-10 text-slate-500" />
           </div>
@@ -407,15 +468,25 @@ export default function RescueAppPage() {
           <p className="text-sm text-slate-500 max-w-sm mb-4">
             Standby. You will receive an alert here as soon as Command Center dispatches your unit.
           </p>
-          <div className="inline-flex items-center space-x-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-emerald-400 text-xs font-mono">
+          <div className="inline-flex items-center space-x-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-emerald-400 text-xs font-mono mb-4">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
             <span>Uplink Active: {teamName}</span>
+          </div>
+
+          <div>
+            <button 
+              onClick={toggleDutyStatus}
+              className="text-xs text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-500/50 bg-slate-800/80 px-4 py-2 rounded-xl transition-all flex items-center space-x-1.5 cursor-pointer mx-auto"
+            >
+              <PowerOff className="w-3.5 h-3.5" />
+              <span>Go Off Duty</span>
+            </button>
           </div>
         </div>
       )}
 
       {/* GPS Status footer */}
-      {location && selectedTeamId && (
+      {location && selectedTeamId && isOnDuty && (
         <div className="p-2 text-[10px] text-slate-500 text-center font-mono">
           GPS: {location.lat.toFixed(4)}, {location.lng.toFixed(4)} • Transmitting Live
         </div>
