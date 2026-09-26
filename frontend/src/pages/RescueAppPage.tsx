@@ -81,8 +81,8 @@ export default function RescueAppPage() {
       localStorage.setItem('responder_team_name', team.name);
       localStorage.setItem('responder_team_type', team.team_type);
     } catch (err: any) {
-      console.error("Connect error:", err);
-      setError("Failed to connect. Please check network connection.");
+      const detail = err.response?.data?.detail || err.message;
+      setError(detail ? `Connection error: ${detail}` : "Failed to connect. Please check network connection.");
     } finally {
       setIsConnecting(false);
     }

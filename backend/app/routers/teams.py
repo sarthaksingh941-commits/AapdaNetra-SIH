@@ -21,70 +21,20 @@ def create_team(
     team_in: RescueTeamCreate,
     db: Session = Depends(get_db)
 ):
-    try:
-        # Check if team with this name already exists
-        existing = db.query(RescueTeam).filter(RescueTeam.name == team_in.name).first()
-        if existing:
-            if team_in.team_type:
-                existing.team_type = team_in.team_type
-            db.commit()
-            db.refresh(existing)
-            return existing
-
-        team = RescueTeam(**team_in.dict())
-        db.add(team)
+    # Check if team with this name already exists
+    existing = db.query(RescueTeam).filter(RescueTeam.name == team_in.name).first()
+    if existing:
+        if team_in.team_type:
+            existing.team_type = team_in.team_type
         db.commit()
-        db.refresh(team)
-        return team
-    except Exception as e:
-        db.rollback()
-        # Fallback: ensure pin column exists and retry
-        try:
-            from sqlalchemy import text
-            db.execute(text("ALTER TABLE rescue_teams ADD COLUMN IF NOT EXISTS pin VARCHAR(50);"))
-            db.commit()
-        except Exception:
-            try:
-                from sqlalchemy import text
-                db.execute(text("ALTER TABLE rescue_teams ADD COLUMN pin VARCHAR(50);"))
-                db.commit()
-            except Exception:
-                pass
-        
-        try:
-            team = RescueTeam(**team_in.dict())
-            db.add(team)
-            db.commit()
-            db.refresh(team)
-            return team
-        except Exception as retry_err:
-            db.rollback()
-            from fastapi import HTTPException
-            raise HTTPException(status_code=400, detail=f"Failed to create team: {str(retry_err)}")
+        db.refresh(existing)
+        return existing
 
-from app.schemas.team import RescueTeamLogin
-from fastapi import HTTPException
-
-@router.post("/login")
-def login_team(
-    login_data: RescueTeamLogin,
-    db: Session = Depends(get_db)
-):
-    team = db.query(RescueTeam).filter(RescueTeam.id == login_data.team_id).first()
-    if not team:
-        raise HTTPException(status_code=404, detail="Team not found")
-    
-    # If team already has a PIN configured, verify it
-    if team.pin:
-        if team.pin != login_data.pin:
-            raise HTTPException(status_code=401, detail="Incorrect Security PIN")
-    else:
-        # Pre-seeded team with no pin yet: set its pin to this first login attempt!
-        team.pin = login_data.pin
-        db.commit()
-        db.refresh(team)
-
-    return {"success": True, "team_id": team.id, "name": team.name, "type": team.team_type}
+    team = RescueTeam(**team_in.dict())
+    db.add(team)
+    db.commit()
+    db.refresh(team)
+    return team
 
 @router.put("/{team_id}/location", response_model=RescueTeamResponse)
 def update_team_location(
