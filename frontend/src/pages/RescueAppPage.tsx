@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { teamService, incidentService } from '../services/api';
-import { Navigation, Truck, BellRing, CheckCircle, Map as MapIcon, AlertTriangle, ShieldCheck, RefreshCw, Radio, Loader2, Power, PowerOff, ShieldAlert, Compass } from 'lucide-react';
+import { Navigation, Truck, BellRing, CheckCircle, Map as MapIcon, AlertTriangle, ShieldCheck, RefreshCw, Radio, Loader2, Power, PowerOff, ShieldAlert, Compass, Volume2, XCircle } from 'lucide-react';
 
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -26,6 +26,87 @@ const targetIcon = new L.Icon({
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
 });
 
+// Web Audio API Synthesizer for Ola-Style Dispatch Alert Chime
+class DispatchSoundSynth {
+  private ctx: AudioContext | null = null;
+  private intervalId: any = null;
+
+  start() {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!this.ctx) {
+        this.ctx = new AudioCtx();
+      }
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume();
+      }
+      this.stop();
+
+      const playUrgentChime = () => {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+
+        // Two-tone rising urgency chime (Ola partner style)
+        const osc1 = this.ctx.createOscillator();
+        const gain1 = this.ctx.createGain();
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(800, now);
+        osc1.frequency.exponentialRampToValueAtTime(1200, now + 0.12);
+        gain1.gain.setValueAtTime(0.4, now);
+        gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc1.connect(gain1);
+        gain1.connect(this.ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.25);
+
+        const osc2 = this.ctx.createOscillator();
+        const gain2 = this.ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(1200, now + 0.28);
+        osc2.frequency.exponentialRampToValueAtTime(1600, now + 0.42);
+        gain2.gain.setValueAtTime(0.5, now + 0.28);
+        gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.65);
+        osc2.connect(gain2);
+        gain2.connect(this.ctx.destination);
+        osc2.start(now + 0.28);
+        osc2.stop(now + 0.65);
+
+        // Haptic vibration feedback for mobile handsets
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate([200, 100, 200]);
+        }
+      };
+
+      playUrgentChime();
+      this.intervalId = setInterval(playUrgentChime, 1500);
+    } catch (e) {
+      console.warn("Audio chime notice:", e);
+    }
+  }
+
+  stop() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+  }
+}
+
+const dispatchSound = new DispatchSoundSynth();
+
+function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return (R * c).toFixed(1);
+}
+
 const QUICK_PRESETS = [
   { name: "NDRF Alpha", type: "RESCUE" },
   { name: "State Medical Response", type: "MEDICAL" },
@@ -43,6 +124,19 @@ export default function RescueAppPage() {
   const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState('');
+
+  // Initial GPS lock on mount
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        (err) => console.warn("Initial GPS lock:", err.message),
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    }
+  }, []);
 
   // 1. Restore saved team & duty status on load
   useEffect(() => {
@@ -76,9 +170,11 @@ export default function RescueAppPage() {
     setError('');
 
     let teamId: number = Date.now();
+    const currentLat = location?.lat || 28.6139;
+    const currentLng = location?.lng || 77.2090;
 
     try {
-      const team = await teamService.registerTeam(finalName, finalType);
+      const team = await teamService.registerTeam(finalName, finalType, currentLat, currentLng);
       if (team && team.id) {
         teamId = team.id;
       }
@@ -102,8 +198,8 @@ export default function RescueAppPage() {
         name: finalName,
         team_type: finalType,
         status: 'AVAILABLE',
-        latitude: location?.lat || 28.6139,
-        longitude: location?.lng || 77.2090,
+        latitude: currentLat,
+        longitude: currentLng,
         updatedAt: Date.now()
       };
       localStorage.setItem('live_responder_telemetry', JSON.stringify(initialTelemetry));
@@ -113,6 +209,7 @@ export default function RescueAppPage() {
   };
 
   const handleDisconnect = () => {
+    dispatchSound.stop();
     localStorage.removeItem('responder_team_id');
     localStorage.removeItem('responder_team_name');
     localStorage.removeItem('responder_team_type');
@@ -126,6 +223,11 @@ export default function RescueAppPage() {
     const nextDuty = !isOnDuty;
     setIsOnDuty(nextDuty);
     localStorage.setItem('responder_duty', String(nextDuty));
+
+    if (!nextDuty) {
+      dispatchSound.stop();
+      setActiveIncident(null);
+    }
 
     try {
       const cur = JSON.parse(localStorage.getItem('live_responder_telemetry') || '{}');
@@ -158,7 +260,7 @@ export default function RescueAppPage() {
               id: selectedTeamId,
               name: teamName,
               team_type: teamType,
-              status: isOnDuty ? 'AVAILABLE' : 'OFF_DUTY',
+              status: isOnDuty ? (activeIncident?.status === 'ACCEPTED' ? 'DISPATCHED' : 'AVAILABLE') : 'OFF_DUTY',
               latitude: lat,
               longitude: lng,
               updatedAt: Date.now()
@@ -182,16 +284,16 @@ export default function RescueAppPage() {
     return () => {
       if (watchId) navigator.geolocation.clearWatch(watchId);
     };
-  }, [selectedTeamId, isOnDuty]);
+  }, [selectedTeamId, isOnDuty, activeIncident?.status]);
 
-  // 4. Poll for dispatches from Command Center ONLY when ON DUTY
+  // 4. Poll for dispatches from Command Center ONLY when ON DUTY (Strict Team Isolation)
   useEffect(() => {
     let interval: any;
     if (selectedTeamId && isOnDuty) {
       const checkAssignment = async () => {
         try {
           const data = await teamService.getActiveIncident(Number(selectedTeamId));
-          if (data?.incident?.status !== 'RESOLVED') {
+          if (data && data.incident && data.incident.status !== 'RESOLVED') {
             setActiveIncident(data);
           } else {
             setActiveIncident(null);
@@ -201,7 +303,7 @@ export default function RescueAppPage() {
         }
       };
       checkAssignment();
-      interval = setInterval(checkAssignment, 2000);
+      interval = setInterval(checkAssignment, 1500);
     } else {
       setActiveIncident(null);
     }
@@ -210,12 +312,70 @@ export default function RescueAppPage() {
     };
   }, [selectedTeamId, isOnDuty]);
 
-  const handleAccept = async () => {
-    if (activeIncident) {
-      await teamService.acceptAssignment(activeIncident.assignment_id);
-      const data = await teamService.getActiveIncident(Number(selectedTeamId));
-      setActiveIncident(data);
+  // 5. Instant zero-latency cross-tab event bus: Only triggers on THIS responder's team_id!
+  useEffect(() => {
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('aapdanetra_fleet_bus');
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'NEW_DISPATCH') {
+          // STRICT FILTER: Only trigger if the command center targeted THIS specific unit!
+          if (selectedTeamId && isOnDuty && Number(event.data.team_id) === Number(selectedTeamId)) {
+            setActiveIncident({
+              assignment_id: event.data.assignment_id || Date.now(),
+              team_id: selectedTeamId,
+              status: 'PENDING',
+              incident: event.data.incident
+            });
+          }
+        }
+      };
+    } catch (e) {}
+    return () => {
+      if (channel) channel.close();
+    };
+  }, [selectedTeamId, isOnDuty]);
+
+  // 6. Audio chime trigger for incoming dispatch alert
+  useEffect(() => {
+    if (activeIncident?.status === 'PENDING') {
+      dispatchSound.start();
+    } else {
+      dispatchSound.stop();
     }
+    return () => {
+      dispatchSound.stop();
+    };
+  }, [activeIncident?.status]);
+
+  const handleAccept = async () => {
+    dispatchSound.stop();
+    if (activeIncident) {
+      try {
+        await teamService.acceptAssignment(activeIncident.assignment_id);
+      } catch (e) {}
+      
+      try {
+        const cur = JSON.parse(localStorage.getItem('live_responder_telemetry') || '{}');
+        cur.status = 'DISPATCHED';
+        localStorage.setItem('live_responder_telemetry', JSON.stringify(cur));
+      } catch (e) {}
+
+      setActiveIncident({
+        ...activeIncident,
+        status: 'ACCEPTED'
+      });
+    }
+  };
+
+  const handleDecline = async () => {
+    dispatchSound.stop();
+    if (activeIncident?.assignment_id) {
+      try {
+        await teamService.declineAssignment(activeIncident.assignment_id);
+      } catch (e) {}
+    }
+    setActiveIncident(null);
   };
 
   const handleNeutralize = async () => {
@@ -223,6 +383,11 @@ export default function RescueAppPage() {
       if (window.confirm("Are you sure this threat is completely neutralized?")) {
         await incidentService.updateStatus(activeIncident.incident.id, 'RESOLVED');
         setActiveIncident(null);
+        try {
+          const cur = JSON.parse(localStorage.getItem('live_responder_telemetry') || '{}');
+          cur.status = 'AVAILABLE';
+          localStorage.setItem('live_responder_telemetry', JSON.stringify(cur));
+        } catch (e) {}
         alert("Mission Accomplished! Emergency marked RESOLVED on Command Center.");
       }
     }
@@ -400,43 +565,86 @@ export default function RescueAppPage() {
             </button>
           </div>
         ) : activeIncident?.status === 'PENDING' ? (
-          /* Screen 2: Incoming Dispatch Alert */
-          <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 text-center max-w-lg mx-auto w-full">
-            <div className="bg-red-600 w-28 h-28 sm:w-36 sm:h-36 rounded-full flex items-center justify-center mb-6 shadow-[0_0_60px_rgba(220,38,38,0.8)] animate-pulse">
-              <BellRing className="w-14 h-14 sm:w-18 sm:h-18 text-white animate-bounce" />
-            </div>
-            
-            <div className="inline-block px-3 py-1 bg-red-500/20 border border-red-500/40 rounded-full text-red-400 text-xs font-mono uppercase tracking-widest mb-2 animate-pulse">
-              🚨 Emergency Alert Received
-            </div>
-            
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-red-500 tracking-wider mb-2">NEW DISPATCH</h2>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-md mb-6">
-              Command Center has assigned a high-priority incident to your unit.
-            </p>
-            
-            <div className="bg-slate-900 border border-red-500/40 w-full p-5 sm:p-6 rounded-3xl shadow-xl mb-6 text-left">
-              <div className="text-[11px] text-red-400 font-mono uppercase tracking-wider mb-1">INCIDENT TITLE</div>
-              <div className="text-lg sm:text-xl font-bold uppercase text-white mb-4">{activeIncident.incident.title}</div>
-              <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-800 text-xs font-mono">
-                <div>
-                  <span className="text-slate-500 block text-[10px]">CATEGORY</span>
-                  <span className="text-orange-400 font-semibold">{activeIncident.incident.type}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px]">CITIZENS AFFECTED</span>
-                  <span className="text-white font-semibold">{activeIncident.incident.reports} Reports</span>
-                </div>
-              </div>
+          /* Screen 2: Ola Partner Style Incoming Emergency Dispatch Request */
+          <div className="flex-1 flex flex-col items-center justify-center p-3 sm:p-6 text-center max-w-lg mx-auto w-full">
+            {/* Audio Indicator Banner */}
+            <div className="mb-4 inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-red-500/20 border border-red-500/50 text-red-400 text-xs font-mono tracking-wider animate-pulse">
+              <Volume2 className="w-4 h-4 animate-bounce" />
+              <span>EMERGENCY CHIME ACTIVE • PRIORITY DISPATCH</span>
             </div>
 
-            <button 
-              onClick={handleAccept}
-              className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4.5 sm:py-5 rounded-2xl text-base sm:text-lg tracking-wider uppercase shadow-[0_0_30px_rgba(22,163,74,0.6)] transition-all flex items-center justify-center space-x-2 cursor-pointer"
-            >
-              <CheckCircle className="w-6 h-6" />
-              <span>ACCEPT DISPATCH</span>
-            </button>
+            {/* Glowing Pulsing Siren Ring */}
+            <div className="relative mb-5">
+              <div className="absolute inset-0 bg-red-600 rounded-full blur-2xl opacity-60 animate-ping"></div>
+              <div className="relative bg-gradient-to-tr from-red-600 to-rose-500 w-28 h-28 sm:w-32 sm:h-32 rounded-full flex items-center justify-center shadow-[0_0_60px_rgba(220,38,38,0.9)] border-4 border-red-300">
+                <BellRing className="w-14 h-14 sm:w-16 sm:h-16 text-white animate-bounce" />
+              </div>
+            </div>
+            
+            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-wider mb-1 uppercase">
+              NEW MISSION ASSIGNED
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 max-w-md mb-4">
+              Command Center has routed this critical incident directly to <strong className="text-amber-400">{teamName}</strong>.
+            </p>
+            
+            {/* Incident Mission Card */}
+            <div className="bg-slate-900/90 border-2 border-red-500/60 w-full p-4 sm:p-6 rounded-3xl shadow-2xl mb-5 text-left backdrop-blur-md">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[10px] sm:text-xs font-mono text-red-400 uppercase font-bold tracking-wider">
+                  TARGET EMERGENCY #{activeIncident.incident.id}
+                </span>
+                <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 font-bold">
+                  PRIORITY: {activeIncident.incident.priority_score ? activeIncident.incident.priority_score.toFixed(1) : '85.0'}
+                </span>
+              </div>
+
+              <div className="text-lg sm:text-xl font-bold uppercase text-white mb-3 leading-snug">
+                {activeIncident.incident.title}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5 pt-3 border-t border-slate-800 text-xs font-mono">
+                <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                  <span className="text-slate-500 block text-[9px] uppercase">INCIDENT TYPE</span>
+                  <span className="text-orange-400 font-bold uppercase">{activeIncident.incident.type}</span>
+                </div>
+                <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                  <span className="text-slate-500 block text-[9px] uppercase">AFFECTED CITIZENS</span>
+                  <span className="text-white font-bold">{activeIncident.incident.reports} Reports</span>
+                </div>
+              </div>
+
+              {location && (
+                <div className="mt-2.5 p-2.5 bg-blue-950/30 border border-blue-500/30 rounded-xl flex items-center justify-between font-mono text-xs">
+                  <div className="flex items-center space-x-2 text-blue-400">
+                    <Compass className="w-4 h-4 text-blue-400" />
+                    <span>DISTANCE: ~{calculateDistanceKm(location.lat, location.lng, activeIncident.incident.latitude, activeIncident.incident.longitude)} KM</span>
+                  </div>
+                  <span className="text-slate-400 text-[11px]">
+                    ETA: ~{Math.max(2, Math.round(Number(calculateDistanceKm(location.lat, location.lng, activeIncident.incident.latitude, activeIncident.incident.longitude)) * 2.5))} MINS
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons: Accept / Decline */}
+            <div className="w-full space-y-2.5">
+              <button 
+                onClick={handleAccept}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-4 sm:py-4.5 rounded-2xl text-base sm:text-lg tracking-wider uppercase shadow-[0_0_35px_rgba(16,185,129,0.7)] transition-all flex items-center justify-center space-x-2 cursor-pointer border-2 border-emerald-400"
+              >
+                <CheckCircle className="w-6 h-6 animate-pulse" />
+                <span>ACCEPT DISPATCH (EN ROUTE)</span>
+              </button>
+
+              <button 
+                onClick={handleDecline}
+                className="w-full bg-slate-900 hover:bg-red-950/40 text-slate-400 hover:text-red-400 border border-slate-800 hover:border-red-500/50 font-bold py-2.5 rounded-xl text-xs font-mono tracking-wider uppercase transition-all flex items-center justify-center space-x-2 cursor-pointer"
+              >
+                <XCircle className="w-4 h-4" />
+                <span>DECLINE / SQUAD BUSY</span>
+              </button>
+            </div>
           </div>
         ) : activeIncident?.status === 'ACCEPTED' ? (
           /* Screen 3: Ola Maps Route & Mission Active (Adaptive Mobile & Tablet Split) */

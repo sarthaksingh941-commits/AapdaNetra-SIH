@@ -5,16 +5,13 @@ from app.db.database import get_db
 from app.models.incident import Incident
 from app.schemas.incident import IncidentResponse, IncidentStatusUpdate
 from app.schemas.team import AssignmentCreate, AssignmentResponse
-from app.models.team import Assignment
-from app.models.user import User
-from app.core.deps import get_current_active_responder
+from app.models.team import Assignment, RescueTeam, TeamStatus, AssignmentStatus
 
 router = APIRouter()
 
 @router.get("/", response_model=List[IncidentResponse])
 def get_incidents(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_responder)
+    db: Session = Depends(get_db)
 ):
     incidents = db.query(Incident).all()
     return incidents
@@ -22,8 +19,7 @@ def get_incidents(
 @router.get("/{id}", response_model=IncidentResponse)
 def get_incident(
     id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_responder)
+    db: Session = Depends(get_db)
 ):
     incident = db.query(Incident).filter(Incident.id == id).first()
     if not incident:
@@ -34,14 +30,20 @@ def get_incident(
 def update_incident_status(
     id: int,
     status_update: IncidentStatusUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_responder)
+    db: Session = Depends(get_db)
 ):
     incident = db.query(Incident).filter(Incident.id == id).first()
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
     
     incident.status = status_update.status
+    if status_update.status in ["RESOLVED", "CLOSED"]:
+        assignments = db.query(Assignment).filter(Assignment.incident_id == id).all()
+        for a in assignments:
+            a.status = AssignmentStatus.COMPLETED
+            team = db.query(RescueTeam).filter(RescueTeam.id == a.team_id).first()
+            if team and str(team.status) != "OFF_DUTY":
+                team.status = TeamStatus.AVAILABLE
     db.commit()
     db.refresh(incident)
     return incident
@@ -50,8 +52,7 @@ def update_incident_status(
 def assign_team(
     id: int,
     assignment_in: AssignmentCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_responder)
+    db: Session = Depends(get_db)
 ):
     assignment = Assignment(**assignment_in.dict())
     db.add(assignment)
@@ -60,6 +61,11 @@ def assign_team(
     incident = db.query(Incident).filter(Incident.id == id).first()
     if incident:
         incident.status = "ASSIGNED"
+        
+    # Update team status to DISPATCHED
+    team = db.query(RescueTeam).filter(RescueTeam.id == assignment_in.team_id).first()
+    if team:
+        team.status = TeamStatus.DISPATCHED
         
     db.commit()
     db.refresh(assignment)

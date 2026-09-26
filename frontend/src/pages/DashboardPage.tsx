@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { Clock, MapPin, Users, ShieldAlert, BarChart3, List, Radio, CloudRain } from 'lucide-react';
+import { Clock, MapPin, Users, ShieldAlert, BarChart3, List, Radio, CloudRain, Truck, ExternalLink } from 'lucide-react';
 import { incidentService, teamService, authService } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -79,7 +79,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showAssign, setShowAssign] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState("");
-  const [activeTab, setActiveTab] = useState<'list' | 'analytics'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'fleet' | 'analytics'>('list');
   const [broadcastStatus, setBroadcastStatus] = useState<0 | 1 | 2 | 3>(0);
   const [currentTime, setCurrentTime] = useState<string>('');
   const user = authService.getCurrentUser();
@@ -157,24 +157,19 @@ export default function DashboardPage() {
               const idx = merged.findIndex(t => t.id === localData.id || t.name === localData.name);
               if (idx >= 0) {
                 merged[idx] = { ...merged[idx], ...localData };
-              } else {
+              } else if (localData.status !== 'OFF_DUTY' && localData.latitude && localData.longitude) {
                 merged.push(localData);
               }
             }
           }
         } catch (e) {}
 
-        // Fallback default teams if remote is completely empty
-        if (merged.length === 0) {
-          merged = [
-            { id: 1, name: "NDRF Alpha Team", team_type: "RESCUE", status: "AVAILABLE", latitude: 28.6139, longitude: 77.2090 },
-            { id: 2, name: "Delhi Fire Service", team_type: "FIRE", status: "AVAILABLE", latitude: 28.5355, longitude: 77.3910 },
-            { id: 3, name: "State Medical Response", team_type: "MEDICAL", status: "AVAILABLE", latitude: 28.7041, longitude: 77.1025 },
-            { id: 4, name: "Delhi Police Patrol", team_type: "POLICE", status: "AVAILABLE", latitude: 28.6300, longitude: 77.2200 }
-          ];
-        }
+        // STRICT FILTER: Zero ghost trucks. Only include responders that are currently ON DUTY with valid GPS coordinates!
+        const liveOnDuty = merged.filter(
+          t => t && t.status !== 'OFF_DUTY' && t.latitude !== null && t.latitude !== undefined && t.longitude !== null && t.longitude !== undefined
+        );
 
-        setTeams(merged);
+        setTeams(liveOnDuty);
       } catch (err) {
         console.error("Failed to fetch teams", err);
       }
@@ -243,19 +238,133 @@ export default function DashboardPage() {
           <div className="flex border-b border-slate-800">
             <button 
               onClick={() => setActiveTab('list')} 
-              className={`flex-1 py-4 font-mono text-xs tracking-wider flex items-center justify-center transition-all ${activeTab === 'list' ? 'text-blue-400 border-b-2 border-blue-500 bg-blue-500/5' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'}`}
+              className={`flex-1 py-3.5 font-mono text-[11px] tracking-wider flex items-center justify-center transition-all ${activeTab === 'list' ? 'text-blue-400 border-b-2 border-blue-500 bg-blue-500/5' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'}`}
             >
-              <List className="w-4 h-4 mr-2"/> LIVE FEEDS
+              <List className="w-3.5 h-3.5 mr-1.5"/> INCIDENTS ({incidents.length})
+            </button>
+            <button 
+              onClick={() => setActiveTab('fleet')} 
+              className={`flex-1 py-3.5 font-mono text-[11px] tracking-wider flex items-center justify-center transition-all ${activeTab === 'fleet' ? 'text-blue-400 border-b-2 border-blue-500 bg-blue-500/5' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'}`}
+            >
+              <Truck className="w-3.5 h-3.5 mr-1.5"/> FLEET ({teams.length})
             </button>
             <button 
               onClick={() => setActiveTab('analytics')} 
-              className={`flex-1 py-4 font-mono text-xs tracking-wider flex items-center justify-center transition-all ${activeTab === 'analytics' ? 'text-blue-400 border-b-2 border-blue-500 bg-blue-500/5' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'}`}
+              className={`flex-1 py-3.5 font-mono text-[11px] tracking-wider flex items-center justify-center transition-all ${activeTab === 'analytics' ? 'text-blue-400 border-b-2 border-blue-500 bg-blue-500/5' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'}`}
             >
-              <BarChart3 className="w-4 h-4 mr-2"/> ANALYTICS
+              <BarChart3 className="w-3.5 h-3.5 mr-1.5"/> ANALYTICS
             </button>
           </div>
 
-          {activeTab === 'list' ? (
+          {activeTab === 'fleet' ? (
+            <>
+              <div className="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
+                <div>
+                  <h2 className="font-mono text-xs text-slate-300 font-bold uppercase tracking-wider flex items-center">
+                    <Truck className="w-4 h-4 mr-2 text-blue-400" />
+                    LIVE ON-DUTY RESPONDERS
+                  </h2>
+                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">Strict zero-ghost filtering • Only live GPS units</p>
+                </div>
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-mono border ${
+                  teams.length > 0 
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 animate-pulse' 
+                    : 'bg-slate-800 text-slate-500 border-slate-700'
+                }`}>
+                  {teams.length} ONLINE
+                </span>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                {teams.length === 0 ? (
+                  <div className="p-6 text-center rounded-2xl border border-slate-800 bg-slate-900/40 my-4">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center mx-auto mb-3">
+                      <Radio className="w-6 h-6 text-blue-400 animate-pulse" />
+                    </div>
+                    <div className="text-sm font-bold text-slate-300 mb-1">NO UNITS ON DUTY</div>
+                    <p className="text-xs text-slate-400 font-mono leading-relaxed mb-4 max-w-xs mx-auto">
+                      All seeded mock trucks have been eliminated. Responders will appear here live once connected via the Responder Terminal.
+                    </p>
+                    <a
+                      href="/rescue-app"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-mono font-bold transition-all shadow-lg cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>OPEN RESPONDER APP (/rescue-app)</span>
+                    </a>
+                  </div>
+                ) : (
+                  teams.map((team) => {
+                    const isDispatched = team.status === 'DISPATCHED';
+                    return (
+                      <div 
+                        key={team.id}
+                        className={`p-4 rounded-xl border backdrop-blur-sm transition-all duration-200 ${
+                          isDispatched 
+                            ? 'border-blue-500/60 bg-blue-950/20 shadow-[0_0_15px_rgba(59,130,246,0.15)]' 
+                            : 'border-slate-800 bg-slate-900/60 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center space-x-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                            <h3 className="font-bold text-white text-sm tracking-wide">{team.name}</h3>
+                          </div>
+                          <span className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded border ${
+                            isDispatched 
+                              ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' 
+                              : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                          }`}>
+                            {isDispatched ? 'EN ROUTE' : 'STANDBY (READY)'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-3">
+                          <span className="text-blue-400 uppercase font-semibold">{team.team_type}</span>
+                          <span className="text-slate-500 text-[11px]">
+                            📍 {team.latitude.toFixed(4)}, {team.longitude.toFixed(4)}
+                          </span>
+                        </div>
+
+                        {selectedIncident && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                await incidentService.assignTeam(selectedIncident.id, team.id);
+                                try {
+                                  const ch = new BroadcastChannel('aapdanetra_fleet_bus');
+                                  ch.postMessage({
+                                    type: 'NEW_DISPATCH',
+                                    team_id: team.id,
+                                    incident_id: selectedIncident.id,
+                                    incident: selectedIncident
+                                  });
+                                  ch.close();
+                                } catch (e) {}
+                                alert(`Squad "${team.name}" dispatched to Incident #${selectedIncident.id}! Ola-style alert sent.`);
+                                const incs = await incidentService.getAllIncidents();
+                                setIncidents(incs.filter((i: any) => i.status !== 'RESOLVED'));
+                                const tms = await teamService.getAllTeams();
+                                setTeams(tms.filter((t: any) => t.status !== 'OFF_DUTY'));
+                              } catch (e) {
+                                console.error(e);
+                                alert("Failed to deploy unit.");
+                              }
+                            }}
+                            className="w-full bg-blue-600/20 hover:bg-blue-600 border border-blue-500/60 hover:border-transparent text-blue-400 hover:text-white py-2 rounded-lg text-xs font-mono font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer uppercase tracking-wider"
+                          >
+                            <span>DEPLOY TO #{selectedIncident.id.toString().padStart(4, '0')}</span>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          ) : activeTab === 'list' ? (
             <>
               <div className="p-4 border-b border-slate-800 bg-slate-900/80">
                 <h2 className="font-mono text-sm text-slate-300 flex items-center justify-between">
@@ -420,27 +529,59 @@ export default function DashboardPage() {
               </div>
             ) : showAssign ? (
               <div className="space-y-3">
-                <select 
-                  className="w-full bg-slate-950 border border-slate-700 text-slate-300 p-2.5 rounded font-mono text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  onChange={(e) => setSelectedTeam(e.target.value)}
-                  value={selectedTeam}
-                >
-                  <option value="">-- SELECT RESPONDER TEAM --</option>
-                  {teams.filter(t => t.status !== 'OFF_DUTY').map(t => <option key={t.id} value={t.id}>{t.name} ({t.team_type})</option>)}
-                </select>
+                {teams.length === 0 ? (
+                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs font-mono text-red-400 text-center">
+                    ⚠️ No responders currently ON DUTY. Open <a href="/rescue-app" target="_blank" className="underline font-bold">/rescue-app</a> to connect.
+                  </div>
+                ) : (
+                  <select 
+                    className="w-full bg-slate-950 border border-slate-700 text-slate-300 p-2.5 rounded font-mono text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    onChange={(e) => setSelectedTeam(e.target.value)}
+                    value={selectedTeam}
+                  >
+                    <option value="">-- SELECT ON-DUTY RESPONDER UNIT --</option>
+                    {teams.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.team_type}) — {t.status === 'DISPATCHED' ? 'EN ROUTE' : 'AVAILABLE (STANDBY)'}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <div className="flex space-x-3">
                   <button 
+                    disabled={teams.length === 0}
                     onClick={async () => {
-                      if (!selectedTeam) return alert('Select a team');
+                      if (!selectedTeam) return alert('Select an on-duty responder unit');
                       try {
-                        await incidentService.assignTeam(selectedIncident.id, parseInt(selectedTeam));
-                        alert('Team Assigned Successfully!');
+                        const teamIdNum = parseInt(selectedTeam);
+                        await incidentService.assignTeam(selectedIncident.id, teamIdNum);
+                        
+                        try {
+                          const channel = new BroadcastChannel('aapdanetra_fleet_bus');
+                          channel.postMessage({
+                            type: 'NEW_DISPATCH',
+                            team_id: teamIdNum,
+                            incident_id: selectedIncident.id,
+                            incident: selectedIncident
+                          });
+                          channel.close();
+                        } catch (e) {}
+
+                        const assignedTeamObj = teams.find(t => t.id === teamIdNum);
+                        alert(`Unit "${assignedTeamObj?.name || teamIdNum}" Assigned! Dispatch alert sent to their handset.`);
                         setShowAssign(false);
+                        setSelectedTeam("");
+                        
+                        const incs = await incidentService.getAllIncidents();
+                        setIncidents(incs.filter((i: any) => i.status !== 'RESOLVED'));
+                        const tms = await teamService.getAllTeams();
+                        setTeams(tms.filter((t: any) => t.status !== 'OFF_DUTY'));
                       } catch(e) {
                         console.error(e);
+                        alert("Failed to assign unit. Please try again.");
                       }
                     }}
-                    className="flex-1 bg-blue-600/20 border border-blue-500 text-blue-400 py-2 rounded text-xs font-mono font-bold hover:bg-blue-600 hover:text-white transition-all shadow-[0_0_10px_rgba(59,130,246,0.2)] hover:shadow-[0_0_15px_rgba(59,130,246,0.5)] uppercase tracking-wider"
+                    className="flex-1 bg-blue-600/20 disabled:opacity-40 border border-blue-500 text-blue-400 py-2 rounded text-xs font-mono font-bold hover:bg-blue-600 hover:text-white transition-all shadow-[0_0_10px_rgba(59,130,246,0.2)] hover:shadow-[0_0_15px_rgba(59,130,246,0.5)] uppercase tracking-wider"
                   >Deploy Unit</button>
                   <button onClick={() => setShowAssign(false)} className="flex-1 bg-transparent border border-slate-600 text-slate-400 py-2 rounded text-xs font-mono hover:bg-slate-800 transition uppercase tracking-wider">Abort</button>
                 </div>
@@ -569,7 +710,12 @@ export default function DashboardPage() {
                     <div className="text-xs font-mono bg-slate-900 text-slate-300 p-2 border rounded" style={{borderColor: bgColor}}>
                       <strong className="block mb-1 uppercase tracking-widest border-b pb-1" style={{color: bgColor, borderColor: bgColor}}>{team.name}</strong>
                       <div className="flex justify-between mt-1"><span>TYPE:</span><span className="text-white">{team.team_type}</span></div>
-                      <div className="flex justify-between"><span>STATUS:</span><span className="text-green-400">EN ROUTE</span></div>
+                      <div className="flex justify-between mt-0.5">
+                        <span>STATUS:</span>
+                        <span className={team.status === 'DISPATCHED' ? 'text-blue-400 font-bold' : 'text-emerald-400 font-bold'}>
+                          {team.status === 'DISPATCHED' ? 'EN ROUTE' : 'STANDBY (READY)'}
+                        </span>
+                      </div>
                     </div>
                   </Popup>
                 </Marker>

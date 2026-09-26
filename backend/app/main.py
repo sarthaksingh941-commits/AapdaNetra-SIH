@@ -13,12 +13,21 @@ try:
 except Exception as e:
     print("Database metadata create_all warning:", e)
 
-# Auto-seed mock teams on startup
+# Auto-seed and reset mock teams to OFF_DUTY on startup
 try:
     from seed_teams import seed_teams
     seed_teams()
 except Exception as e:
     print("Could not seed teams on startup:", e)
+
+# Ensure no ghost trucks appear by resetting existing unassigned database teams to OFF_DUTY
+try:
+    with engine.connect() as conn:
+        from sqlalchemy import text
+        conn.execute(text("UPDATE rescue_teams SET status = 'OFF_DUTY';"))
+        conn.commit()
+except Exception as e:
+    print("Notice resetting teams to off-duty on startup:", e)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

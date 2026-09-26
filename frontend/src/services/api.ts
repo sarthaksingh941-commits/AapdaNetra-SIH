@@ -63,8 +63,13 @@ export const teamService = {
     const response = await api.post('/teams/login', { team_id: teamId, pin });
     return response.data;
   },
-  registerTeam: async (name: string, teamType: string) => {
-    const response = await api.post('/teams/', { name, team_type: teamType });
+  registerTeam: async (name: string, teamType: string, lat?: number, lng?: number) => {
+    const payload: any = { name, team_type: teamType };
+    if (lat !== undefined && lng !== undefined) {
+      payload.latitude = lat;
+      payload.longitude = lng;
+    }
+    const response = await api.post('/teams/', payload);
     return response.data;
   },
   updateTeamLocation: async (teamId: number, lat: number, lng: number) => {
@@ -77,6 +82,10 @@ export const teamService = {
   },
   acceptAssignment: async (assignmentId: number) => {
     const response = await api.post(`/teams/assignment/${assignmentId}/accept`);
+    return response.data;
+  },
+  declineAssignment: async (assignmentId: number) => {
+    const response = await api.post(`/teams/assignment/${assignmentId}/decline`);
     return response.data;
   },
   updateTeamStatus: async (teamId: number, status: string) => {
