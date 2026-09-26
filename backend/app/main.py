@@ -7,8 +7,11 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-# Create database tables (for development, use Alembic in production)
-Base.metadata.create_all(bind=engine)
+# Create database tables safely without crashing uvicorn startup
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print("Database metadata create_all warning:", e)
 
 # Auto-seed mock teams on startup
 try:
