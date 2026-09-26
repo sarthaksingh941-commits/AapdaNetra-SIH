@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { teamService, incidentService } from '../services/api';
-import { Navigation, Truck, BellRing, CheckCircle, Map as MapIcon, AlertTriangle, ShieldCheck, RefreshCw, PlusCircle, Check } from 'lucide-react';
+import { Navigation, Truck, BellRing, CheckCircle, Map as MapIcon, AlertTriangle, ShieldCheck, RefreshCw, Radio, Loader2 } from 'lucide-react';
 
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -14,7 +14,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// Create custom icons for the rescuer and the target
+// Custom icons
 const rescuerIcon = new L.Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
@@ -26,110 +26,127 @@ const targetIcon = new L.Icon({
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
 });
 
+const QUICK_PRESETS = [
+  { name: "NDRF Alpha", type: "RESCUE" },
+  { name: "State Medical Response", type: "MEDICAL" },
+  { name: "Delhi Fire Service", type: "FIRE" },
+  { name: "Police Patrol Unit 1", type: "POLICE" }
+];
+
 export default function RescueAppPage() {
-  const [teams, setTeams] = useState<any[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<number | ''>('');
+  const [teamName, setTeamName] = useState('');
+  const [teamType, setTeamType] = useState('RESCUE');
+  
   const [activeIncident, setActiveIncident] = useState<any>(null);
   const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState('');
-  
-  // Quick unit creation toggle
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newTeamName, setNewTeamName] = useState('');
-  const [newTeamType, setNewTeamType] = useState('RESCUE');
-  const [isCreating, setIsCreating] = useState(false);
 
-  // 1. Fetch teams & restore saved unit on load
-  const fetchTeams = () => {
-    teamService.getAllTeams()
-      .then(data => setTeams(data))
-      .catch(err => console.error("Error fetching teams", err));
-  };
-
+  // 1. Restore saved team on load
   useEffect(() => {
-    fetchTeams();
     const savedId = localStorage.getItem('responder_team_id');
-    if (savedId) {
+    const savedName = localStorage.getItem('responder_team_name');
+    const savedType = localStorage.getItem('responder_team_type');
+    
+    if (savedId && savedName) {
       setSelectedTeamId(Number(savedId));
+      setTeamName(savedName);
+      if (savedType) setTeamType(savedType);
     }
   }, []);
 
-  const handleSelectTeam = (id: number) => {
-    setSelectedTeamId(id);
-    localStorage.setItem('responder_team_id', String(id));
+  // 2. Connect / Set Unit Name
+  const handleConnect = async (e?: React.FormEvent, customName?: string, customType?: string) => {
+    if (e) e.preventDefault();
+    const finalName = (customName || teamName).trim();
+    const finalType = customType || teamType;
+
+    if (!finalName) {
+      setError("Please enter your name or unit title");
+      return;
+    }
+
+    setIsConnecting(true);
     setError('');
+
+    try {
+      // Find or create team on the backend
+      const team = await teamService.registerTeam(finalName, finalType);
+      setSelectedTeamId(team.id);
+      setTeamName(team.name);
+      setTeamType(team.team_type);
+
+      localStorage.setItem('responder_team_id', String(team.id));
+      localStorage.setItem('responder_team_name', team.name);
+      localStorage.setItem('responder_team_type', team.team_type);
+    } catch (err: any) {
+      console.error("Connect error:", err);
+      setError("Failed to connect. Please check network connection.");
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
-  const handleSwitchUnit = () => {
+  const handleDisconnect = () => {
     localStorage.removeItem('responder_team_id');
+    localStorage.removeItem('responder_team_name');
+    localStorage.removeItem('responder_team_type');
     setSelectedTeamId('');
     setActiveIncident(null);
     setError('');
   };
 
-  const handleQuickCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTeamName.trim()) return;
-    setIsCreating(true);
-    try {
-      const newTeam = await teamService.registerTeam(newTeamName.trim(), newTeamType);
-      handleSelectTeam(newTeam.id);
-      setShowCreateModal(false);
-      setNewTeamName('');
-      fetchTeams();
-    } catch (err: any) {
-      setError("Failed to create unit. Please try again.");
-    } finally {
-      setIsCreating(false);
+  // 3. Continuously send GPS location once connected
+  useEffect(() => {
+    let watchId: number;
+    if (selectedTeamId && navigator.geolocation) {
+      watchId = navigator.geolocation.watchPosition(
+        async (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setLocation({ lat, lng });
+          try {
+            await teamService.updateTeamLocation(Number(selectedTeamId), lat, lng);
+          } catch (err) {
+            console.error("Failed to transmit GPS coordinates:", err);
+          }
+        },
+        (err) => {
+          console.warn("GPS error:", err.message);
+          setError("GPS access needed: Please allow location in browser settings.");
+        },
+        { enableHighAccuracy: true, maximumAge: 0 }
+      );
     }
-  };
+    return () => {
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+    };
+  }, [selectedTeamId]);
 
-  // 2. Poll for assignments if a team is selected
+  // 4. Poll for dispatches from Command Center
   useEffect(() => {
     let interval: any;
     if (selectedTeamId) {
       const checkAssignment = async () => {
         try {
           const data = await teamService.getActiveIncident(Number(selectedTeamId));
-          // Don't override if we just marked it resolved locally
           if (data?.incident?.status !== 'RESOLVED') {
-             setActiveIncident(data);
+            setActiveIncident(data);
           } else {
-             setActiveIncident(null);
+            setActiveIncident(null);
           }
         } catch (err) {
-          console.error("Poll error", err);
+          console.error("Assignment poll error:", err);
         }
       };
       checkAssignment();
-      interval = setInterval(checkAssignment, 2500); // Poll every 2.5 seconds
+      interval = setInterval(checkAssignment, 2000); // 2 second check
     }
-    return () => { if (interval) clearInterval(interval); };
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [selectedTeamId]);
-
-  // 3. Track GPS if accepted
-  useEffect(() => {
-    let watchId: number;
-    if (activeIncident?.status === 'ACCEPTED' && selectedTeamId) {
-      if (navigator.geolocation) {
-        watchId = navigator.geolocation.watchPosition(
-          async (pos) => {
-            const lat = pos.coords.latitude;
-            const lng = pos.coords.longitude;
-            setLocation({ lat, lng });
-            try {
-              await teamService.updateTeamLocation(Number(selectedTeamId), lat, lng);
-            } catch (err) {
-              console.error("Failed to update location", err);
-            }
-          },
-          (err) => setError(err.message),
-          { enableHighAccuracy: true, maximumAge: 0 }
-        );
-      }
-    }
-    return () => { if (watchId) navigator.geolocation.clearWatch(watchId); };
-  }, [activeIncident?.status, selectedTeamId]);
 
   const handleAccept = async () => {
     if (activeIncident) {
@@ -141,10 +158,10 @@ export default function RescueAppPage() {
 
   const handleNeutralize = async () => {
     if (activeIncident?.incident) {
-      if (window.confirm("Are you sure the threat is completely neutralized?")) {
+      if (window.confirm("Are you sure this threat is completely neutralized?")) {
         await incidentService.updateStatus(activeIncident.incident.id, 'RESOLVED');
         setActiveIncident(null);
-        alert("Threat Neutralized! Terminal returned to Standby mode.");
+        alert("Mission Accomplished! Emergency marked RESOLVED on Command Center.");
       }
     }
   };
@@ -156,19 +173,17 @@ export default function RescueAppPage() {
     }
   };
 
-  const currentTeam = teams.find(t => t.id === selectedTeamId);
-
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col font-sans">
-      {/* Header */}
+      {/* Top Header */}
       <header className="flex items-center justify-between p-4 bg-slate-950 border-b border-slate-800 z-10 shadow-lg">
         <div className="flex items-center space-x-3">
           <Truck className="w-6 h-6 text-blue-500" />
           <div>
             <h1 className="text-lg font-bold tracking-wider">Responder Terminal</h1>
             <p className="text-[10px] text-slate-400 uppercase tracking-widest">
-              {currentTeam ? (
-                <span className="text-green-400 font-semibold">{currentTeam.name} ({currentTeam.team_type})</span>
+              {selectedTeamId ? (
+                <span className="text-green-400 font-semibold">{teamName}</span>
               ) : (
                 'AapdaNetra Live Dispatch'
               )}
@@ -178,29 +193,29 @@ export default function RescueAppPage() {
 
         {selectedTeamId && (
           <button 
-            onClick={handleSwitchUnit}
+            onClick={handleDisconnect}
             className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition-all cursor-pointer"
-            title="Switch Unit"
+            title="Change Responder Name"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Switch Unit</span>
+            <span>Change Name</span>
           </button>
         )}
       </header>
 
-      {/* Screen 1: Select or Create Unit */}
+      {/* Screen 1: Set Responder Name */}
       {!selectedTeamId ? (
         <div className="p-6 flex-1 flex flex-col justify-center max-w-md mx-auto w-full">
           <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
             <div className="w-14 h-14 bg-blue-500/10 border border-blue-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Truck className="w-7 h-7 text-blue-400" />
+              <Radio className="w-7 h-7 text-blue-400 animate-pulse" />
             </div>
             
-            <h2 className="text-center text-base font-bold uppercase tracking-wider text-white mb-1">
-              Select Your Unit
+            <h2 className="text-center text-lg font-bold uppercase tracking-wider text-white mb-1">
+              Initialize Responder Unit
             </h2>
             <p className="text-center text-xs text-slate-400 mb-6">
-              Connect this mobile device to the Command Center
+              Enter your name or unit title to appear on the Command Center map
             </p>
 
             {error && (
@@ -209,94 +224,70 @@ export default function RescueAppPage() {
               </div>
             )}
 
-            {!showCreateModal ? (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-mono text-slate-400 mb-2">AVAILABLE RESCUE TEAMS</label>
-                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                    {teams.map(t => (
-                      <button
-                        key={t.id}
-                        onClick={() => handleSelectTeam(t.id)}
-                        className="w-full text-left p-3.5 bg-slate-900 hover:bg-blue-600/20 border border-slate-700 hover:border-blue-500 rounded-xl transition-all flex items-center justify-between group cursor-pointer"
-                      >
-                        <div>
-                          <div className="text-sm font-bold text-white group-hover:text-blue-400">{t.name}</div>
-                          <div className="text-[10px] text-slate-400 uppercase font-mono">{t.team_type}</div>
-                        </div>
-                        <span className="text-xs bg-slate-800 group-hover:bg-blue-600 text-slate-300 group-hover:text-white px-2.5 py-1 rounded-md font-mono">
-                          Connect
-                        </span>
-                      </button>
-                    ))}
-                    {teams.length === 0 && (
-                      <div className="text-center py-6 text-xs text-slate-500 font-mono">
-                        Loading teams from Command Center...
-                      </div>
-                    )}
-                  </div>
-                </div>
+            <form onSubmit={handleConnect} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono text-slate-400 mb-1.5">RESPONDER / UNIT NAME</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Sarthak - NDRF Alpha" 
+                  value={teamName}
+                  onChange={e => setTeamName(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3.5 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                  required
+                  autoFocus
+                />
+              </div>
 
-                <div className="pt-2 border-t border-slate-700/60">
-                  <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="w-full py-3 bg-slate-900 hover:bg-slate-700 border border-slate-600 text-slate-300 text-xs font-semibold rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer"
-                  >
-                    <PlusCircle className="w-4 h-4 text-blue-400" />
-                    <span>Create New Unit</span>
-                  </button>
+              <div>
+                <label className="block text-xs font-mono text-slate-400 mb-1.5">VEHICLE / SQUAD TYPE</label>
+                <select 
+                  value={teamType}
+                  onChange={e => setTeamType(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3.5 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                >
+                  <option value="RESCUE">🚚 RESCUE SQUAD (NDRF/SDRF)</option>
+                  <option value="MEDICAL">🚑 MEDICAL / AMBULANCE</option>
+                  <option value="FIRE">🚒 FIRE BRIGADE</option>
+                  <option value="POLICE">🚓 POLICE PATROL</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-mono text-slate-400 mb-1.5">OR TAP A QUICK PRESET:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {QUICK_PRESETS.map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleConnect(undefined, preset.name, preset.type)}
+                      className="p-2 bg-slate-900 hover:bg-blue-600/20 border border-slate-700 hover:border-blue-500 rounded-lg text-left transition-all cursor-pointer"
+                    >
+                      <div className="text-xs font-semibold text-slate-200 truncate">{preset.name}</div>
+                      <div className="text-[10px] text-slate-400 uppercase font-mono">{preset.type}</div>
+                    </button>
+                  ))}
                 </div>
               </div>
-            ) : (
-              <form onSubmit={handleQuickCreate} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-mono text-slate-400 mb-1">NEW UNIT NAME</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. NDRF Quick Reaction Team" 
-                    value={newTeamName}
-                    onChange={e => setNewTeamName(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
-                    required
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-mono text-slate-400 mb-1">UNIT TYPE</label>
-                  <select 
-                    value={newTeamType}
-                    onChange={e => setNewTeamType(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
-                  >
-                    <option value="RESCUE">RESCUE SQUAD (NDRF/SDRF)</option>
-                    <option value="MEDICAL">MEDICAL / AMBULANCE</option>
-                    <option value="FIRE">FIRE BRIGADE</option>
-                    <option value="POLICE">POLICE PATROL</option>
-                  </select>
-                </div>
-                <div className="flex space-x-2 pt-2">
-                  <button 
-                    type="button"
-                    onClick={() => setShowCreateModal(false)}
-                    className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold rounded-xl transition-all cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit" 
-                    disabled={isCreating}
-                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all cursor-pointer flex items-center justify-center space-x-1"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>{isCreating ? "Creating..." : "Save & Connect"}</span>
-                  </button>
-                </div>
-              </form>
-            )}
+
+              <button 
+                type="submit" 
+                disabled={isConnecting}
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-4 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all flex items-center justify-center space-x-2 cursor-pointer mt-4"
+              >
+                {isConnecting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>CONNECTING UPLINK...</span>
+                  </>
+                ) : (
+                  <span>START LIVE UPLINK</span>
+                )}
+              </button>
+            </form>
           </div>
         </div>
       ) : activeIncident?.status === 'PENDING' ? (
-        /* Screen 2: Incoming Dispatch Alarm (Ola Style) */
+        /* Screen 2: Incoming Dispatch Alert */
         <div className="flex-1 flex flex-col items-center justify-center p-6 bg-red-950/30 animate-pulse">
           <div className="bg-red-600 w-32 h-32 rounded-full flex items-center justify-center mb-8 shadow-[0_0_50px_rgba(220,38,38,0.8)]">
             <BellRing className="w-16 h-16 text-white animate-bounce" />
@@ -308,7 +299,7 @@ export default function RescueAppPage() {
             <div className="text-xs text-red-400 font-mono mb-1">INCIDENT TYPE</div>
             <div className="text-xl font-bold uppercase mb-4">{activeIncident.incident.title}</div>
             <div className="flex justify-between text-sm text-slate-400 font-mono">
-              <span>STATUS: Immediate Priority</span>
+              <span>PRIORITY: Critical</span>
               <span>REPORTS: {activeIncident.incident.reports} Citizens</span>
             </div>
           </div>
@@ -321,7 +312,7 @@ export default function RescueAppPage() {
           </button>
         </div>
       ) : activeIncident?.status === 'ACCEPTED' ? (
-        /* Screen 3: Live Ola Map Route & Mission View */
+        /* Screen 3: Ola Maps Route & Mission Active */
         <div className="flex-1 flex flex-col p-6 bg-slate-900 max-w-md mx-auto w-full">
           <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl mb-6 shadow-lg flex items-center justify-between">
             <div className="flex items-center">
@@ -361,7 +352,6 @@ export default function RescueAppPage() {
                     />
                     <Marker position={[location.lat, location.lng]} icon={rescuerIcon} />
                     <Marker position={[activeIncident.incident.latitude, activeIncident.incident.longitude]} icon={targetIcon} />
-                    {/* Simulated Ola Directions API Polyline */}
                     <Polyline 
                       positions={[
                         [location.lat, location.lng],
@@ -403,7 +393,7 @@ export default function RescueAppPage() {
           </div>
         </div>
       ) : (
-        /* Screen 4: Standby Mode */
+        /* Screen 4: Standby Screen */
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
           <div className="w-24 h-24 rounded-full bg-slate-800 border-4 border-slate-700 flex items-center justify-center mb-6">
             <Truck className="w-10 h-10 text-slate-500" />
@@ -414,14 +404,15 @@ export default function RescueAppPage() {
           </p>
           <div className="inline-flex items-center space-x-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-emerald-400 text-xs font-mono">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-            <span>Uplink Active: {currentTeam?.name || 'Unit Connected'}</span>
+            <span>Uplink Active: {teamName}</span>
           </div>
         </div>
       )}
 
+      {/* GPS Status footer */}
       {location && selectedTeamId && (
         <div className="p-2 text-[10px] text-slate-500 text-center font-mono">
-          GPS: {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
+          GPS: {location.lat.toFixed(4)}, {location.lng.toFixed(4)} • Transmitting Live
         </div>
       )}
     </div>

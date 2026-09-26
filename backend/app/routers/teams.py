@@ -22,6 +22,15 @@ def create_team(
     db: Session = Depends(get_db)
 ):
     try:
+        # Check if team with this name already exists
+        existing = db.query(RescueTeam).filter(RescueTeam.name == team_in.name).first()
+        if existing:
+            if team_in.team_type:
+                existing.team_type = team_in.team_type
+            db.commit()
+            db.refresh(existing)
+            return existing
+
         team = RescueTeam(**team_in.dict())
         db.add(team)
         db.commit()
