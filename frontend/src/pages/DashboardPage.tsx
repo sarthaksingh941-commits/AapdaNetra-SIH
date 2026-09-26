@@ -29,6 +29,49 @@ function MapUpdater({ selectedIncident }: { selectedIncident: any }) {
 
 const COLORS = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#8b5cf6', '#10b981'];
 
+// Helper to format exact local emergency time with relative context
+function formatIncidentTime(dateVal: string | Date | undefined | null): string {
+  if (!dateVal) return '--:--';
+
+  let date: Date;
+  if (typeof dateVal === 'string') {
+    let s = dateVal.trim();
+    // If backend sent ISO string without timezone indicator (like "2026-09-26T16:22:52"),
+    // append 'Z' so JavaScript correctly parses it as UTC and converts to local IST time
+    if (!s.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(s)) {
+      s += 'Z';
+    }
+    date = new Date(s);
+  } else {
+    date = new Date(dateVal);
+  }
+
+  if (isNaN(date.getTime())) return '--:--';
+
+  const now = new Date();
+  const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  let relative = '';
+  if (diffSec < 60) {
+    relative = 'Just now';
+  } else if (diffSec < 3600) {
+    relative = `${Math.floor(diffSec / 60)}m ago`;
+  } else if (diffSec < 86400) {
+    relative = `${Math.floor(diffSec / 3600)}h ago`;
+  } else {
+    relative = `${Math.floor(diffSec / 86400)}d ago`;
+  }
+
+  // Exact 12-hour local time format: e.g. "09:52 PM"
+  const timeStr = date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  return `${timeStr} (${relative})`;
+}
+
 export default function DashboardPage() {
   const [incidents, setIncidents] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
@@ -38,8 +81,18 @@ export default function DashboardPage() {
   const [selectedTeam, setSelectedTeam] = useState("");
   const [activeTab, setActiveTab] = useState<'list' | 'analytics'>('list');
   const [broadcastStatus, setBroadcastStatus] = useState<0 | 1 | 2 | 3>(0);
+  const [currentTime, setCurrentTime] = useState<string>('');
   const user = authService.getCurrentUser();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const updateClock = () => {
+      setCurrentTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }));
+    };
+    updateClock();
+    const timer = setInterval(updateClock, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleBroadcast = () => {
     setBroadcastStatus(1); // scanning
@@ -163,7 +216,11 @@ export default function DashboardPage() {
             <p className="text-[10px] text-slate-400 uppercase tracking-[0.2em]">Command & Control Center</p>
           </div>
         </div>
-        <div className="flex items-center space-x-6">
+        <div className="flex items-center space-x-4">
+          <div className="hidden sm:flex items-center space-x-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/60 font-mono text-xs text-blue-400">
+            <Clock className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+            <span>IST: {currentTime || '--:--:--'}</span>
+          </div>
           <div className="flex items-center space-x-2">
             <span className="relative flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -224,7 +281,9 @@ export default function DashboardPage() {
                       <span className="text-red-400 flex items-center bg-red-500/10 px-2 py-1 rounded border border-red-500/20">
                         PRIORITY: {incident.priority_score.toFixed(1)}
                       </span>
-                      <span className="text-slate-400 flex items-center"><Clock className="h-3 w-3 mr-1.5 text-blue-400"/> {new Date(incident.created_at).toLocaleTimeString()}</span>
+                      <span className="text-slate-300 flex items-center bg-slate-900/80 px-2 py-0.5 rounded border border-slate-800 text-[11px]">
+                        <Clock className="h-3 w-3 mr-1.5 text-blue-400"/> {formatIncidentTime(incident.created_at)}
+                      </span>
                     </div>
                     
                     <div className="flex text-xs font-mono text-slate-500 space-x-4">
@@ -330,10 +389,16 @@ export default function DashboardPage() {
           {/* Action Panel for Selected Incident */}
           {selectedIncident && (
           <div className="p-5 bg-slate-900 border-t border-slate-700 shadow-[0_-10px_30px_rgba(0,0,0,0.3)] z-20">
-            <h3 className="font-mono text-xs text-blue-400 mb-4 flex items-center uppercase tracking-widest">
-              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-2 animate-pulse"></span>
-              Targeting: #{selectedIncident.id.toString().padStart(4, '0')}
-            </h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-mono text-xs text-blue-400 flex items-center uppercase tracking-widest">
+                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-2 animate-pulse"></span>
+                Targeting: #{selectedIncident.id.toString().padStart(4, '0')}
+              </h3>
+              <span className="text-[11px] font-mono text-slate-400 flex items-center bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
+                <Clock className="w-3 h-3 mr-1.5 text-blue-400" />
+                Reported: <strong className="text-slate-200 ml-1">{formatIncidentTime(selectedIncident.created_at)}</strong>
+              </span>
+            </div>
             
             {broadcastStatus > 0 ? (
               <div className="bg-slate-950 border border-slate-700 rounded-lg p-4 font-mono text-xs mb-2">
@@ -450,10 +515,13 @@ export default function DashboardPage() {
                   icon={heatIcon}
                 >
                   <Popup className="cyber-popup">
-                    <div className="text-xs font-mono bg-slate-900 text-slate-300 p-2 border border-slate-700 rounded">
+                    <div className="text-xs font-mono bg-slate-900 text-slate-300 p-2.5 border border-slate-700 rounded min-w-[200px]">
                       <strong className="text-red-400 block mb-1 uppercase tracking-widest border-b border-slate-700 pb-1">{incident.title}</strong>
-                      <div className="flex justify-between mt-1"><span>PRIORITY:</span><span className="text-red-400">{incident.priority_score.toFixed(1)}</span></div>
+                      <div className="flex justify-between mt-1"><span>PRIORITY:</span><span className="text-red-400 font-bold">{incident.priority_score.toFixed(1)}</span></div>
                       <div className="flex justify-between"><span>STATUS:</span><span className="text-blue-400">{incident.status}</span></div>
+                      <div className="flex justify-between text-slate-400 mt-1.5 pt-1.5 border-t border-slate-800 text-[11px]">
+                        <span>REPORTED:</span><span className="text-white font-semibold">{formatIncidentTime(incident.created_at)}</span>
+                      </div>
                     </div>
                   </Popup>
                 </Marker>

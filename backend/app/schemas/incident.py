@@ -1,6 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.incident import IncidentStatus
 from app.schemas.report import ReportResponse
 
@@ -19,6 +19,12 @@ class IncidentResponse(IncidentBase):
     created_at: datetime
     updated_at: datetime
     reports: Optional[List[ReportResponse]] = []
+
+    @field_serializer("created_at", "updated_at", mode="wrap")
+    def serialize_dt(self, dt: datetime, handler):
+        if isinstance(dt, datetime) and dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return handler(dt)
 
     class Config:
         from_attributes = True
