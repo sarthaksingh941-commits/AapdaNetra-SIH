@@ -63,8 +63,8 @@ export const teamService = {
     const response = await api.post('/teams/login', { team_id: teamId, pin });
     return response.data;
   },
-  registerTeam: async (name: string, teamType: string, pin: string) => {
-    const response = await api.post('/teams/', { name, team_type: teamType, pin });
+  registerTeam: async (name: string, teamType: string) => {
+    const response = await api.post('/teams/', { name, team_type: teamType });
     return response.data;
   },
   updateTeamLocation: async (teamId: number, lat: number, lng: number) => {

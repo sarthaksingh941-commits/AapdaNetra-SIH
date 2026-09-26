@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { teamService, incidentService } from '../services/api';
-import { Navigation, Truck, BellRing, CheckCircle, Map as MapIcon, AlertTriangle, ShieldCheck, LogOut, Loader2 } from 'lucide-react';
+import { Navigation, Truck, BellRing, CheckCircle, Map as MapIcon, AlertTriangle, ShieldCheck, RefreshCw, PlusCircle, Check } from 'lucide-react';
 
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -33,94 +33,61 @@ export default function RescueAppPage() {
   const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
   const [error, setError] = useState('');
   
-  // Auth state
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [pin, setPin] = useState('');
+  // Quick unit creation toggle
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamType, setNewTeamType] = useState('RESCUE');
+  const [isCreating, setIsCreating] = useState(false);
 
-  // 1. Fetch teams & restore saved session on load
+  // 1. Fetch teams & restore saved unit on load
   const fetchTeams = () => {
-    teamService.getAllTeams().then(data => setTeams(data)).catch(err => console.error(err));
+    teamService.getAllTeams()
+      .then(data => setTeams(data))
+      .catch(err => console.error("Error fetching teams", err));
   };
 
   useEffect(() => {
     fetchTeams();
-    const savedAuth = localStorage.getItem('responder_auth');
     const savedId = localStorage.getItem('responder_team_id');
-    if (savedAuth === 'true' && savedId) {
+    if (savedId) {
       setSelectedTeamId(Number(savedId));
-      setIsAuthenticated(true);
     }
   }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTeamId || !pin) {
-      setError("Please select a team and enter Security PIN");
-      return;
-    }
-    setIsSubmitting(true);
+  const handleSelectTeam = (id: number) => {
+    setSelectedTeamId(id);
+    localStorage.setItem('responder_team_id', String(id));
     setError('');
-    try {
-      const res = await teamService.loginTeam(Number(selectedTeamId), pin);
-      localStorage.setItem('responder_auth', 'true');
-      localStorage.setItem('responder_team_id', String(selectedTeamId));
-      if (res?.name) localStorage.setItem('responder_team_name', res.name);
-      setIsAuthenticated(true);
-      setError('');
-    } catch (err: any) {
-      setError(err.response?.data?.detail || "Invalid Security PIN");
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTeamName.trim() || !pin.trim()) {
-      setError("Please enter team name and PIN");
-      return;
-    }
-    if (pin.length < 4) {
-      setError("Security PIN must be at least 4 digits");
-      return;
-    }
-    setIsSubmitting(true);
-    setError('');
-    try {
-      const newTeam = await teamService.registerTeam(newTeamName.trim(), newTeamType, pin.trim());
-      localStorage.setItem('responder_auth', 'true');
-      localStorage.setItem('responder_team_id', String(newTeam.id));
-      localStorage.setItem('responder_team_name', newTeam.name);
-      setSelectedTeamId(newTeam.id);
-      setIsAuthenticated(true);
-      setError('');
-      fetchTeams();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || "Registration failed. Check network or try again.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('responder_auth');
+  const handleSwitchUnit = () => {
     localStorage.removeItem('responder_team_id');
-    localStorage.removeItem('responder_team_name');
-    setIsAuthenticated(false);
     setSelectedTeamId('');
     setActiveIncident(null);
-    setPin('');
     setError('');
   };
 
-  // 2. Poll for assignments if authenticated
+  const handleQuickCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTeamName.trim()) return;
+    setIsCreating(true);
+    try {
+      const newTeam = await teamService.registerTeam(newTeamName.trim(), newTeamType);
+      handleSelectTeam(newTeam.id);
+      setShowCreateModal(false);
+      setNewTeamName('');
+      fetchTeams();
+    } catch (err: any) {
+      setError("Failed to create unit. Please try again.");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  // 2. Poll for assignments if a team is selected
   useEffect(() => {
     let interval: any;
-    if (isAuthenticated && selectedTeamId) {
+    if (selectedTeamId) {
       const checkAssignment = async () => {
         try {
           const data = await teamService.getActiveIncident(Number(selectedTeamId));
@@ -135,15 +102,15 @@ export default function RescueAppPage() {
         }
       };
       checkAssignment();
-      interval = setInterval(checkAssignment, 3000); // Check every 3 seconds
+      interval = setInterval(checkAssignment, 2500); // Poll every 2.5 seconds
     }
     return () => { if (interval) clearInterval(interval); };
-  }, [isAuthenticated, selectedTeamId]);
+  }, [selectedTeamId]);
 
   // 3. Track GPS if accepted
   useEffect(() => {
     let watchId: number;
-    if (activeIncident?.status === 'ACCEPTED' && isAuthenticated && selectedTeamId) {
+    if (activeIncident?.status === 'ACCEPTED' && selectedTeamId) {
       if (navigator.geolocation) {
         watchId = navigator.geolocation.watchPosition(
           async (pos) => {
@@ -162,7 +129,7 @@ export default function RescueAppPage() {
       }
     }
     return () => { if (watchId) navigator.geolocation.clearWatch(watchId); };
-  }, [activeIncident?.status, isAuthenticated, selectedTeamId]);
+  }, [activeIncident?.status, selectedTeamId]);
 
   const handleAccept = async () => {
     if (activeIncident) {
@@ -177,7 +144,7 @@ export default function RescueAppPage() {
       if (window.confirm("Are you sure the threat is completely neutralized?")) {
         await incidentService.updateStatus(activeIncident.incident.id, 'RESOLVED');
         setActiveIncident(null);
-        alert("Situation Neutralized! Standing by for next orders.");
+        alert("Threat Neutralized! Terminal returned to Standby mode.");
       }
     }
   };
@@ -189,60 +156,109 @@ export default function RescueAppPage() {
     }
   };
 
+  const currentTeam = teams.find(t => t.id === selectedTeamId);
+
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col font-sans">
+      {/* Header */}
       <header className="flex items-center justify-between p-4 bg-slate-950 border-b border-slate-800 z-10 shadow-lg">
         <div className="flex items-center space-x-3">
           <Truck className="w-6 h-6 text-blue-500" />
           <div>
-            <h1 className="text-lg font-bold tracking-wider">Responder App</h1>
+            <h1 className="text-lg font-bold tracking-wider">Responder Terminal</h1>
             <p className="text-[10px] text-slate-400 uppercase tracking-widest">
-              {isAuthenticated && selectedTeamId ? (
-                <span className="text-green-400 font-semibold">UNIT: {teams.find(t => t.id === selectedTeamId)?.name || localStorage.getItem('responder_team_name') || 'ACTIVE'}</span>
+              {currentTeam ? (
+                <span className="text-green-400 font-semibold">{currentTeam.name} ({currentTeam.team_type})</span>
               ) : (
-                'AapdaNetra Live Tracking'
+                'AapdaNetra Live Dispatch'
               )}
             </p>
           </div>
         </div>
 
-        {isAuthenticated && (
+        {selectedTeamId && (
           <button 
-            onClick={handleLogout}
+            onClick={handleSwitchUnit}
             className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition-all cursor-pointer"
-            title="Log out and switch unit"
+            title="Switch Unit"
           >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Switch Unit</span>
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Switch Unit</span>
           </button>
         )}
       </header>
 
-      {!isAuthenticated ? (
+      {/* Screen 1: Select or Create Unit */}
+      {!selectedTeamId ? (
         <div className="p-6 flex-1 flex flex-col justify-center max-w-md mx-auto w-full">
           <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
-            <h2 className="text-center text-sm uppercase tracking-widest text-slate-400 mb-6 font-semibold">
-              {isRegistering ? "Register Responder Unit" : "Responder Device Login"}
-            </h2>
+            <div className="w-14 h-14 bg-blue-500/10 border border-blue-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Truck className="w-7 h-7 text-blue-400" />
+            </div>
             
+            <h2 className="text-center text-base font-bold uppercase tracking-wider text-white mb-1">
+              Select Your Unit
+            </h2>
+            <p className="text-center text-xs text-slate-400 mb-6">
+              Connect this mobile device to the Command Center
+            </p>
+
             {error && (
-              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-xl text-red-400 text-xs flex items-center space-x-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
-                <span>{error}</span>
+              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-xl text-red-400 text-xs">
+                {error}
               </div>
             )}
 
-            {isRegistering ? (
-              <form onSubmit={handleRegister} className="space-y-4">
+            {!showCreateModal ? (
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-mono text-slate-400 mb-1">UNIT NAME</label>
+                  <label className="block text-xs font-mono text-slate-400 mb-2">AVAILABLE RESCUE TEAMS</label>
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {teams.map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => handleSelectTeam(t.id)}
+                        className="w-full text-left p-3.5 bg-slate-900 hover:bg-blue-600/20 border border-slate-700 hover:border-blue-500 rounded-xl transition-all flex items-center justify-between group cursor-pointer"
+                      >
+                        <div>
+                          <div className="text-sm font-bold text-white group-hover:text-blue-400">{t.name}</div>
+                          <div className="text-[10px] text-slate-400 uppercase font-mono">{t.team_type}</div>
+                        </div>
+                        <span className="text-xs bg-slate-800 group-hover:bg-blue-600 text-slate-300 group-hover:text-white px-2.5 py-1 rounded-md font-mono">
+                          Connect
+                        </span>
+                      </button>
+                    ))}
+                    {teams.length === 0 && (
+                      <div className="text-center py-6 text-xs text-slate-500 font-mono">
+                        Loading teams from Command Center...
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-700/60">
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="w-full py-3 bg-slate-900 hover:bg-slate-700 border border-slate-600 text-slate-300 text-xs font-semibold rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer"
+                  >
+                    <PlusCircle className="w-4 h-4 text-blue-400" />
+                    <span>Create New Unit</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleQuickCreate} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 mb-1">NEW UNIT NAME</label>
                   <input 
                     type="text" 
-                    placeholder="e.g. NDRF Alpha Unit 1" 
+                    placeholder="e.g. NDRF Quick Reaction Team" 
                     value={newTeamName}
                     onChange={e => setNewTeamName(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3.5 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
                     required
+                    autoFocus
                   />
                 </div>
                 <div>
@@ -250,127 +266,62 @@ export default function RescueAppPage() {
                   <select 
                     value={newTeamType}
                     onChange={e => setNewTeamType(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3.5 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
                   >
                     <option value="RESCUE">RESCUE SQUAD (NDRF/SDRF)</option>
                     <option value="MEDICAL">MEDICAL / AMBULANCE</option>
                     <option value="FIRE">FIRE BRIGADE</option>
-                    <option value="POLICE">POLICE SQUAD</option>
+                    <option value="POLICE">POLICE PATROL</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-xs font-mono text-slate-400 mb-1">CREATE SECURITY PIN (4-6 Digits)</label>
-                  <input 
-                    type="password" 
-                    inputMode="numeric"
-                    placeholder="e.g. 1234" 
-                    value={pin}
-                    onChange={e => setPin(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3.5 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-center tracking-[0.5em] text-lg"
-                    maxLength={6}
-                    required
-                  />
-                </div>
-                <button 
-                  type="submit" 
-                  disabled={isSubmitting}
-                  className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-4 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all flex items-center justify-center space-x-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>REGISTERING...</span>
-                    </>
-                  ) : (
-                    <span>REGISTER UNIT</span>
-                  )}
-                </button>
-                <p 
-                  className="text-center text-xs text-blue-400 hover:underline cursor-pointer pt-2" 
-                  onClick={() => {setIsRegistering(false); setError(''); setPin('');}}
-                >
-                  Already registered? Login here
-                </p>
-              </form>
-            ) : (
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-mono text-slate-400 mb-1">SELECT UNIT</label>
-                  <select 
-                    value={selectedTeamId}
-                    onChange={(e) => setSelectedTeamId(Number(e.target.value))}
-                    className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3.5 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
-                    required
+                <div className="flex space-x-2 pt-2">
+                  <button 
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold rounded-xl transition-all cursor-pointer"
                   >
-                    <option value="">-- Choose Your Unit --</option>
-                    {teams.map(t => (
-                      <option key={t.id} value={t.id}>{t.name} ({t.team_type})</option>
-                    ))}
-                  </select>
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={isCreating}
+                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all cursor-pointer flex items-center justify-center space-x-1"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{isCreating ? "Creating..." : "Save & Connect"}</span>
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-xs font-mono text-slate-400 mb-1">ENTER SECURITY PIN</label>
-                  <input 
-                    type="password" 
-                    inputMode="numeric"
-                    placeholder="Enter PIN (e.g. 1234)" 
-                    value={pin}
-                    onChange={e => setPin(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3.5 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-center tracking-[0.5em] text-lg"
-                    maxLength={6}
-                    required
-                  />
-                  <p className="text-[11px] text-slate-500 mt-1 font-mono">For default teams, any 4-digit PIN (e.g. 1234) sets your password.</p>
-                </div>
-                <button 
-                  type="submit" 
-                  disabled={isSubmitting}
-                  className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-4 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all flex items-center justify-center space-x-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>AUTHENTICATING...</span>
-                    </>
-                  ) : (
-                    <span>AUTHENTICATE & ENTER</span>
-                  )}
-                </button>
-                <p 
-                  className="text-center text-xs text-blue-400 hover:underline cursor-pointer pt-2" 
-                  onClick={() => {setIsRegistering(true); setError(''); setPin('');}}
-                >
-                  New Unit? Register here
-                </p>
               </form>
             )}
           </div>
         </div>
       ) : activeIncident?.status === 'PENDING' ? (
+        /* Screen 2: Incoming Dispatch Alarm (Ola Style) */
         <div className="flex-1 flex flex-col items-center justify-center p-6 bg-red-950/30 animate-pulse">
           <div className="bg-red-600 w-32 h-32 rounded-full flex items-center justify-center mb-8 shadow-[0_0_50px_rgba(220,38,38,0.8)]">
             <BellRing className="w-16 h-16 text-white animate-bounce" />
           </div>
           <h2 className="text-3xl font-bold text-red-500 mb-2">NEW DISPATCH</h2>
-          <p className="text-slate-300 text-center mb-8">Command Center has assigned you to an emergency.</p>
+          <p className="text-slate-300 text-center mb-8">Command Center has assigned an emergency to your unit.</p>
           
           <div className="bg-slate-800 w-full p-4 rounded-xl border border-red-500/30 mb-8 max-w-md">
             <div className="text-xs text-red-400 font-mono mb-1">INCIDENT TYPE</div>
             <div className="text-xl font-bold uppercase mb-4">{activeIncident.incident.title}</div>
             <div className="flex justify-between text-sm text-slate-400 font-mono">
-              <span>DISTANCE: In Range</span>
-              <span>REPORTS: {activeIncident.incident.reports}</span>
+              <span>STATUS: Immediate Priority</span>
+              <span>REPORTS: {activeIncident.incident.reports} Citizens</span>
             </div>
           </div>
 
           <button 
             onClick={handleAccept}
-            className="w-full max-w-md bg-green-600 hover:bg-green-500 text-white font-bold py-5 rounded-2xl text-lg tracking-wider uppercase shadow-[0_0_20px_rgba(22,163,74,0.5)] transition-all flex items-center justify-center"
+            className="w-full max-w-md bg-green-600 hover:bg-green-500 text-white font-bold py-5 rounded-2xl text-lg tracking-wider uppercase shadow-[0_0_20px_rgba(22,163,74,0.5)] transition-all flex items-center justify-center cursor-pointer"
           >
             <CheckCircle className="w-6 h-6 mr-2" /> ACCEPT DISPATCH
           </button>
         </div>
       ) : activeIncident?.status === 'ACCEPTED' ? (
+        /* Screen 3: Live Ola Map Route & Mission View */
         <div className="flex-1 flex flex-col p-6 bg-slate-900 max-w-md mx-auto w-full">
           <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl mb-6 shadow-lg flex items-center justify-between">
             <div className="flex items-center">
@@ -452,16 +403,23 @@ export default function RescueAppPage() {
           </div>
         </div>
       ) : (
+        /* Screen 4: Standby Mode */
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
           <div className="w-24 h-24 rounded-full bg-slate-800 border-4 border-slate-700 flex items-center justify-center mb-6">
             <Truck className="w-10 h-10 text-slate-500" />
           </div>
           <h2 className="text-lg font-bold text-slate-300 mb-2">AWAITING ORDERS</h2>
-          <p className="text-sm text-slate-500 max-w-sm">Standby. You will receive an alert here when Command Center dispatches your unit.</p>
+          <p className="text-sm text-slate-500 max-w-sm mb-4">
+            Standby. You will receive an alert here as soon as Command Center dispatches your unit.
+          </p>
+          <div className="inline-flex items-center space-x-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-emerald-400 text-xs font-mono">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            <span>Uplink Active: {currentTeam?.name || 'Unit Connected'}</span>
+          </div>
         </div>
       )}
-      {error && !isAuthenticated && null /* Error is already rendered inside auth card */}
-      {location && isAuthenticated && (
+
+      {location && selectedTeamId && (
         <div className="p-2 text-[10px] text-slate-500 text-center font-mono">
           GPS: {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
         </div>

@@ -11,7 +11,7 @@ class RescueTeamBase(BaseModel):
     capacity: Optional[int] = 5
 
 class RescueTeamCreate(RescueTeamBase):
-    pin: str
+    pin: Optional[str] = None
 
 class RescueTeamLogin(BaseModel):
     team_id: int
