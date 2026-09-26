@@ -8,12 +8,17 @@ import DashboardPage from './pages/DashboardPage';
 import IncidentDetailsPage from './pages/IncidentDetailsPage';
 import RescueAppPage from './pages/RescueAppPage';
 
+import { Capacitor } from '@capacitor/core';
+
 function App() {
+  const isNative = Capacitor.isNativePlatform();
+
   return (
     <Router>
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <Routes>
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={isNative ? <RescueAppPage /> : <LandingPage />} />
+          <Route path="/landing" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/report" element={<CitizenReportPage />} />

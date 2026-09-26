@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AapdaNetra Responder</string>
+    <string name="title_activity_main">AapdaNetra Responder</string>
+    <string name="package_name">com.aapdanetra.responder</string>
+    <string name="custom_url_scheme">com.aapdanetra.responder</string>
+</resources>
