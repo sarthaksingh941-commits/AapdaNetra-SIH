@@ -21,11 +21,37 @@ def create_team(
     team_in: RescueTeamCreate,
     db: Session = Depends(get_db)
 ):
-    team = RescueTeam(**team_in.dict())
-    db.add(team)
-    db.commit()
-    db.refresh(team)
-    return team
+    try:
+        team = RescueTeam(**team_in.dict())
+        db.add(team)
+        db.commit()
+        db.refresh(team)
+        return team
+    except Exception as e:
+        db.rollback()
+        # Fallback: ensure pin column exists and retry
+        try:
+            from sqlalchemy import text
+            db.execute(text("ALTER TABLE rescue_teams ADD COLUMN IF NOT EXISTS pin VARCHAR(50);"))
+            db.commit()
+        except Exception:
+            try:
+                from sqlalchemy import text
+                db.execute(text("ALTER TABLE rescue_teams ADD COLUMN pin VARCHAR(50);"))
+                db.commit()
+            except Exception:
+                pass
+        
+        try:
+            team = RescueTeam(**team_in.dict())
+            db.add(team)
+            db.commit()
+            db.refresh(team)
+            return team
+        except Exception as retry_err:
+            db.rollback()
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail=f"Failed to create team: {str(retry_err)}")
 
 from app.schemas.team import RescueTeamLogin
 from fastapi import HTTPException
@@ -38,8 +64,17 @@ def login_team(
     team = db.query(RescueTeam).filter(RescueTeam.id == login_data.team_id).first()
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
-    if team.pin != login_data.pin:
-        raise HTTPException(status_code=401, detail="Incorrect PIN")
+    
+    # If team already has a PIN configured, verify it
+    if team.pin:
+        if team.pin != login_data.pin:
+            raise HTTPException(status_code=401, detail="Incorrect Security PIN")
+    else:
+        # Pre-seeded team with no pin yet: set its pin to this first login attempt!
+        team.pin = login_data.pin
+        db.commit()
+        db.refresh(team)
+
     return {"success": True, "team_id": team.id, "name": team.name, "type": team.team_type}
 
 @router.put("/{team_id}/location", response_model=RescueTeamResponse)

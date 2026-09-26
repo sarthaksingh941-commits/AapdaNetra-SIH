@@ -10,6 +10,20 @@ settings = get_settings()
 # Create database tables (for development, use Alembic in production)
 Base.metadata.create_all(bind=engine)
 
+# Safe auto-migration for existing tables on production (PostgreSQL / SQLite)
+from sqlalchemy import text
+try:
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE rescue_teams ADD COLUMN IF NOT EXISTS pin VARCHAR(50);"))
+        conn.commit()
+except Exception:
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE rescue_teams ADD COLUMN pin VARCHAR(50);"))
+            conn.commit()
+    except Exception:
+        pass
+
 # Auto-seed mock teams on startup
 try:
     from seed_teams import seed_teams
