@@ -1,0 +1,10 @@
+{
+  "appId": "com.aapdanetra.responder",
+  "appName": "AapdaNetra Responder",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "plugins": {}
+}
