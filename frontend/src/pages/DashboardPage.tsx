@@ -157,8 +157,6 @@ export default function DashboardPage() {
               const idx = merged.findIndex(t => t.id === localData.id || t.name === localData.name);
               if (idx >= 0) {
                 merged[idx] = { ...merged[idx], ...localData };
-              } else if (localData.status !== 'OFF_DUTY' && localData.latitude && localData.longitude) {
-                merged.push(localData);
               }
             }
           }
@@ -349,8 +347,8 @@ export default function DashboardPage() {
                                 const tms = await teamService.getAllTeams();
                                 setTeams(tms.filter((t: any) => t.status !== 'OFF_DUTY'));
                               } catch (e) {
-                                console.error(e);
-                                alert("Failed to deploy unit.");
+                                console.error("Deploy unit error:", e);
+                                alert("Failed to deploy unit: " + ((e as any)?.response?.data?.detail || (e as any)?.message || "Server Error"));
                               }
                             }}
                             className="w-full bg-blue-600/20 hover:bg-blue-600 border border-blue-500/60 hover:border-transparent text-blue-400 hover:text-white py-2 rounded-lg text-xs font-mono font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer uppercase tracking-wider"
@@ -577,8 +575,8 @@ export default function DashboardPage() {
                         const tms = await teamService.getAllTeams();
                         setTeams(tms.filter((t: any) => t.status !== 'OFF_DUTY'));
                       } catch(e) {
-                        console.error(e);
-                        alert("Failed to assign unit. Please try again.");
+                        console.error("Assign team error:", e);
+                        alert("Failed to assign unit: " + ((e as any)?.response?.data?.detail || (e as any)?.message || "Server Error"));
                       }
                     }}
                     className="flex-1 bg-blue-600/20 disabled:opacity-40 border border-blue-500 text-blue-400 py-2 rounded text-xs font-mono font-bold hover:bg-blue-600 hover:text-white transition-all shadow-[0_0_10px_rgba(59,130,246,0.2)] hover:shadow-[0_0_15px_rgba(59,130,246,0.5)] uppercase tracking-wider"

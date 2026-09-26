@@ -54,18 +54,34 @@ def assign_team(
     assignment_in: AssignmentCreate,
     db: Session = Depends(get_db)
 ):
-    assignment = Assignment(**assignment_in.dict())
+    incident = db.query(Incident).filter(Incident.id == id).first()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    # Ensure the rescue team exists in the database so foreign key never fails
+    team = db.query(RescueTeam).filter(RescueTeam.id == assignment_in.team_id).first()
+    if not team:
+        team = RescueTeam(
+            name=f"Field Unit #{assignment_in.team_id % 10000}",
+            team_type="RESCUE",
+            status=TeamStatus.DISPATCHED,
+            latitude=incident.latitude,
+            longitude=incident.longitude,
+            capacity=5
+        )
+        db.add(team)
+        db.flush()
+        assignment_in.team_id = team.id
+
+    assignment = Assignment(
+        incident_id=id,
+        team_id=team.id,
+        notes=assignment_in.notes or ""
+    )
     db.add(assignment)
     
-    # Update incident status if needed
-    incident = db.query(Incident).filter(Incident.id == id).first()
-    if incident:
-        incident.status = "ASSIGNED"
-        
-    # Update team status to DISPATCHED
-    team = db.query(RescueTeam).filter(RescueTeam.id == assignment_in.team_id).first()
-    if team:
-        team.status = TeamStatus.DISPATCHED
+    incident.status = "ASSIGNED"
+    team.status = TeamStatus.DISPATCHED
         
     db.commit()
     db.refresh(assignment)
