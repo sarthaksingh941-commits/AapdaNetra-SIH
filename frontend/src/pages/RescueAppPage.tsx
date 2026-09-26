@@ -169,9 +169,27 @@ export default function RescueAppPage() {
     setIsConnecting(true);
     setError('');
 
+    let currentLat: number = location?.lat || 28.6139;
+    let currentLng: number = location?.lng || 77.2090;
+
+    // Quick GPS lock attempt if not already locked
+    if (!location) {
+      if (navigator.geolocation) {
+        try {
+          const pos: any = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3500, enableHighAccuracy: true });
+          });
+          currentLat = pos.coords.latitude;
+          currentLng = pos.coords.longitude;
+          setLocation({ lat: currentLat, lng: currentLng });
+        } catch (e) {
+          currentLat = 28.6139;
+          currentLng = 77.2090;
+        }
+      }
+    }
+
     let teamId: number = Date.now();
-    const currentLat = location?.lat || 28.6139;
-    const currentLng = location?.lng || 77.2090;
 
     try {
       const team = await teamService.registerTeam(finalName, finalType, currentLat, currentLng);
@@ -238,6 +256,9 @@ export default function RescueAppPage() {
     if (selectedTeamId) {
       try {
         await teamService.updateTeamStatus(Number(selectedTeamId), nextDuty ? 'AVAILABLE' : 'OFF_DUTY');
+        if (nextDuty && location) {
+          await teamService.updateTeamLocation(Number(selectedTeamId), location.lat, location.lng);
+        }
       } catch (e) {
         console.warn("Duty status update error:", e);
       }

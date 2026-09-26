@@ -1,11 +1,22 @@
 import axios from 'axios';
 
-// Use environment variable if available, otherwise default to localhost
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
+// Detect whether we are running on localhost or on production (Vercel / phone browser)
+const isLocal = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' || 
+  window.location.hostname === '127.0.0.1'
+);
+
+// If VITE_API_URL is provided by env, use it. Otherwise, if local use 127.0.0.1, else use Render cloud backend.
+const API_URL = import.meta.env.VITE_API_URL || (
+  isLocal 
+    ? 'http://127.0.0.1:8000/api/v1' 
+    : 'https://aapdanetra-sih.onrender.com/api/v1'
+);
 
 // Create an axios instance
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 15000,
 });
 
 // Add a request interceptor to automatically attach the token
